@@ -3,16 +3,19 @@ package model
 import "time"
 
 type Document struct {
-	ID        string
-	SubjectID string
-	UserID    string
-	Filename  string
-	FileType  string
-	FileSize  int64
-	FileURL   string
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           string
+	SubjectID    string
+	UserID       string
+	Filename     string
+	FileType     string
+	FileSize     int64
+	FileURL      string
+	Status       string
+	PlainText    string
+	Metadata     []byte
+	ErrorMessage string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type DocumentListFilter struct {
@@ -25,12 +28,14 @@ type DocumentListFilter struct {
 }
 
 type IndexTask struct {
-	ID        string
-	DocID     string
-	SubjectID string
-	UserID    string
-	TaskType  string
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           string
+	DocID        string
+	SubjectID    string
+	UserID       string
+	TaskType     string
+	Status       string
+	RetryCount   int
+	ErrorMessage string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

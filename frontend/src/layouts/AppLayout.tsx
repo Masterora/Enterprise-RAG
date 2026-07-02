@@ -1,6 +1,7 @@
 import { BookOutlined, DashboardOutlined, FileTextOutlined, MessageOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Button, Layout, Menu, Space, Typography, theme } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { clearAuthToken } from '../api/auth'
 
 const { Header, Sider, Content } = Layout
 
@@ -54,6 +55,14 @@ export function AppLayout({ isDarkMode, onToggleTheme }: AppLayoutProps) {
             企业知识库 RAG 问答系统
           </Typography.Text>
           <Space>
+            <Button
+              onClick={() => {
+                clearAuthToken()
+                navigate('/login')
+              }}
+            >
+              退出
+            </Button>
             <Button
               icon={isDarkMode ? <MoonOutlined /> : <SunOutlined />}
               onClick={onToggleTheme}

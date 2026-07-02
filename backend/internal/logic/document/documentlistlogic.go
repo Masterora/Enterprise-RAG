@@ -31,8 +31,12 @@ func NewDocumentListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Docu
 
 func (l *DocumentListLogic) DocumentList(req *types.DocumentListReq) (resp *types.DocumentListResp, err error) {
 	_, pageSize, offset := normalizePage(req.Page, req.PageSize)
+	user, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
 	documents, total, err := l.svcCtx.DocumentRepo.ListByUser(l.ctx, model.DocumentListFilter{
-		UserID:    auth.MockCurrentUserID,
+		UserID:    user.ID,
 		SubjectID: strings.TrimSpace(req.SubjectID),
 		Status:    strings.TrimSpace(req.Status),
 		Keyword:   strings.TrimSpace(req.Keyword),

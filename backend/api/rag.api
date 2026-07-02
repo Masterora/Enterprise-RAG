@@ -39,6 +39,25 @@ type SubjectCreateResp {
 	Subject SubjectInfo `json:"subject"`
 }
 
+type SubjectUpdateReq {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectUpdateResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectDeleteReq {
+	ID string `json:"id"`
+}
+
+type SubjectDeleteResp {
+	Deleted bool `json:"deleted"`
+}
+
 type SubjectListReq {
 	Keyword  string `json:"keyword,optional"`
 	Page     int    `json:"page,optional"`
@@ -56,6 +75,26 @@ type SubjectDetailReq {
 
 type SubjectDetailResp {
 	Subject SubjectInfo `json:"subject"`
+}
+
+type AuthLoginReq {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type UserInfo {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+type AuthLoginResp {
+	Token string   `json:"token"`
+	User  UserInfo `json:"user"`
+}
+
+type UserMeResp {
+	User UserInfo `json:"user"`
 }
 
 // Document module
@@ -76,12 +115,52 @@ type DocumentListResp {
 	Total int64          `json:"total"`
 }
 
+type RetrievalChunk {
+	ID         string  `json:"id"`
+	DocID      string  `json:"doc_id"`
+	DocName    string  `json:"doc_name"`
+	SubjectID  string  `json:"subject_id"`
+	UserID     string  `json:"user_id"`
+	ChunkIndex int64   `json:"chunk_index"`
+	Page       int64   `json:"page"`
+	Section    string  `json:"section"`
+	Content    string  `json:"content"`
+	Score      float64 `json:"score"`
+}
+
+type RetrievalSearchReq {
+	SubjectID string `json:"subject_id"`
+	Query     string `json:"query"`
+	TopK      int    `json:"top_k,optional"`
+}
+
+type RetrievalSearchResp {
+	List []RetrievalChunk `json:"list"`
+}
+
+@server (
+	group: auth
+)
+service rag-api {
+	@handler AuthLoginHandler
+	post /api/auth/login (AuthLoginReq) returns (AuthLoginResp)
+
+	@handler UserMeHandler
+	post /api/users/me returns (UserMeResp)
+}
+
 @server (
 	group: subject
 )
 service rag-api {
 	@handler SubjectCreateHandler
 	post /api/subjects/create (SubjectCreateReq) returns (SubjectCreateResp)
+
+	@handler SubjectUpdateHandler
+	post /api/subjects/update (SubjectUpdateReq) returns (SubjectUpdateResp)
+
+	@handler SubjectDeleteHandler
+	post /api/subjects/delete (SubjectDeleteReq) returns (SubjectDeleteResp)
 
 	@handler SubjectListHandler
 	post /api/subjects/list (SubjectListReq) returns (SubjectListResp)
@@ -101,3 +180,12 @@ service rag-api {
 	@handler DocumentListHandler
 	post /api/documents/list (DocumentListReq) returns (DocumentListResp)
 }
+
+@server (
+	group: retrieval
+)
+service rag-api {
+	@handler RetrievalSearchHandler
+	post /api/retrieval/search (RetrievalSearchReq) returns (RetrievalSearchResp)
+}
+

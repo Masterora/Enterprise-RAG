@@ -1,3 +1,0 @@
-package auth
-
-const MockCurrentUserID = "00000000-0000-0000-0000-000000000001"

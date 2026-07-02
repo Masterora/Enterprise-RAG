@@ -18,6 +18,21 @@ export async function createSubject(payload: {
   return response.data.subject
 }
 
+export async function updateSubject(payload: {
+  id: string
+  name: string
+  description?: string
+  visibility?: string
+}) {
+  const response = await apiClient.post<{ subject: SubjectInfo }>('/subjects/update', payload)
+  return response.data.subject
+}
+
+export async function deleteSubject(id: string) {
+  const response = await apiClient.post<{ deleted: boolean }>('/subjects/delete', { id })
+  return response.data.deleted
+}
+
 export async function listSubjects(payload: {
   keyword?: string
   page?: number

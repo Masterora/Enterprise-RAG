@@ -35,7 +35,12 @@ func (l *SubjectDetailLogic) SubjectDetail(req *types.SubjectDetailReq) (resp *t
 		return nil, errors.New("knowledge base id is required")
 	}
 
-	subject, err := l.svcCtx.SubjectRepo.GetAccessibleByID(l.ctx, id, auth.MockCurrentUserID)
+	user, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	subject, err := l.svcCtx.SubjectRepo.GetAccessibleByID(l.ctx, id, user.ID)
 	if err != nil {
 		return nil, err
 	}

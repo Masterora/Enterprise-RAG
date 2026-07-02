@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrSubjectNotFound = errors.New("subject not found")
 
 type SubjectRepo struct {
 	db *pgxpool.Pool
@@ -134,4 +137,41 @@ func (r *SubjectRepo) ExistsAccessible(ctx context.Context, subjectID, userID st
 		userID,
 	).Scan(&exists)
 	return exists, err
+}
+
+func (r *SubjectRepo) UpdateByOwner(ctx context.Context, subject *model.Subject) error {
+	tag, err := r.db.Exec(
+		ctx,
+		`UPDATE subjects
+		 SET name = $3, description = $4, visibility = $5, updated_at = $6
+		 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		subject.ID,
+		subject.OwnerID,
+		subject.Name,
+		sql.NullString{String: subject.Description, Valid: subject.Description != ""},
+		subject.Visibility,
+		subject.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrSubjectNotFound
+	}
+	return nil
+}
+
+func (r *SubjectRepo) SoftDeleteByOwner(ctx context.Context, subjectID, userID string) (bool, error) {
+	tag, err := r.db.Exec(
+		ctx,
+		`UPDATE subjects
+		 SET deleted_at = now(), updated_at = now()
+		 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
+		subjectID,
+		userID,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }

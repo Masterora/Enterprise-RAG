@@ -3,6 +3,16 @@
 
 package types
 
+type AuthLoginReq struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type AuthLoginResp struct {
+	Token string   `json:"token"`
+	User  UserInfo `json:"user"`
+}
+
 type DocumentInfo struct {
 	ID        string `json:"id"`
 	SubjectID string `json:"subject_id"`
@@ -32,6 +42,29 @@ type DocumentUploadResp struct {
 	Document DocumentInfo `json:"document"`
 }
 
+type RetrievalChunk struct {
+	ID         string  `json:"id"`
+	DocID      string  `json:"doc_id"`
+	DocName    string  `json:"doc_name"`
+	SubjectID  string  `json:"subject_id"`
+	UserID     string  `json:"user_id"`
+	ChunkIndex int64   `json:"chunk_index"`
+	Page       int64   `json:"page"`
+	Section    string  `json:"section"`
+	Content    string  `json:"content"`
+	Score      float64 `json:"score"`
+}
+
+type RetrievalSearchReq struct {
+	SubjectID string `json:"subject_id"`
+	Query     string `json:"query"`
+	TopK      int    `json:"top_k,optional"`
+}
+
+type RetrievalSearchResp struct {
+	List []RetrievalChunk `json:"list"`
+}
+
 type SubjectCreateReq struct {
 	Name        string `json:"name"`
 	Description string `json:"description,optional"`
@@ -40,6 +73,14 @@ type SubjectCreateReq struct {
 
 type SubjectCreateResp struct {
 	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectDeleteReq struct {
+	ID string `json:"id"`
+}
+
+type SubjectDeleteResp struct {
+	Deleted bool `json:"deleted"`
 }
 
 type SubjectDetailReq struct {
@@ -68,4 +109,25 @@ type SubjectListReq struct {
 type SubjectListResp struct {
 	List  []SubjectInfo `json:"list"`
 	Total int64         `json:"total"`
+}
+
+type SubjectUpdateReq struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectUpdateResp struct {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type UserInfo struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+type UserMeResp struct {
+	User UserInfo `json:"user"`
 }

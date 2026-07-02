@@ -17,18 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   nats:
     image: nats:2.10-alpine
     command: ["-js"]
@@ -85,7 +73,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   minio_data:
   etcd_data:
   milvus_data:

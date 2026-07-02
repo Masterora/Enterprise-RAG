@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { getAuthToken } from './api/auth'
 import { AppLayout } from './layouts/AppLayout'
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { ChatPage } from './pages/Chat/ChatPage'
@@ -12,16 +13,30 @@ type AppProps = {
 }
 
 export default function App({ isDarkMode, onToggleTheme }: AppProps) {
+  const isAuthenticated = Boolean(getAuthToken())
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme} />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/subjects" element={<SubjectsPage />} />
-        <Route path="/documents" element={<DocumentsPage />} />
-        <Route path="/chat" element={<ChatPage />} />
+        <Route
+          path="/dashboard"
+          element={isAuthenticated ? <DashboardPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/subjects"
+          element={isAuthenticated ? <SubjectsPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/documents"
+          element={isAuthenticated ? <DocumentsPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/chat"
+          element={isAuthenticated ? <ChatPage /> : <Navigate to="/login" replace />}
+        />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
     </Routes>
   )
 }

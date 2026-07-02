@@ -6,7 +6,9 @@ package handler
 import (
 	"net/http"
 
+	auth "enterprise-rag/backend/internal/handler/auth"
 	document "enterprise-rag/backend/internal/handler/document"
+	retrieval "enterprise-rag/backend/internal/handler/retrieval"
 	subject "enterprise-rag/backend/internal/handler/subject"
 	"enterprise-rag/backend/internal/svc"
 
@@ -14,38 +16,80 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/documents/list",
-				Handler: document.DocumentListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/api/documents/upload",
-				Handler: document.DocumentUploadHandler(serverCtx),
-			},
-		},
-	)
+	authMiddleware := serverCtx.AuthMiddleware.Handle
 
 	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodPost,
+				Path:    "/api/auth/login",
+				Handler: auth.AuthLoginHandler(serverCtx),
+			},
+		},
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/users/me",
+				Handler: auth.UserMeHandler(serverCtx),
+			},
+		),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/documents/list",
+				Handler: document.DocumentListHandler(serverCtx),
+			},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/documents/upload",
+				Handler: document.DocumentUploadHandler(serverCtx),
+			},
+		),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/retrieval/search",
+				Handler: retrieval.RetrievalSearchHandler(serverCtx),
+			},
+		),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
+			rest.Route{
+				Method:  http.MethodPost,
 				Path:    "/api/subjects/create",
 				Handler: subject.SubjectCreateHandler(serverCtx),
 			},
-			{
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/subjects/delete",
+				Handler: subject.SubjectDeleteHandler(serverCtx),
+			},
+			rest.Route{
 				Method:  http.MethodPost,
 				Path:    "/api/subjects/detail",
 				Handler: subject.SubjectDetailHandler(serverCtx),
 			},
-			{
+			rest.Route{
 				Method:  http.MethodPost,
 				Path:    "/api/subjects/list",
 				Handler: subject.SubjectListHandler(serverCtx),
 			},
-		},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/subjects/update",
+				Handler: subject.SubjectUpdateHandler(serverCtx),
+			},
+		),
 	)
 }

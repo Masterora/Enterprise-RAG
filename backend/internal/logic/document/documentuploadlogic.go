@@ -5,6 +5,7 @@ package document
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/svc"
+	"enterprise-rag/backend/internal/task"
 	"enterprise-rag/backend/internal/types"
 
 	"github.com/google/uuid"
@@ -46,7 +48,12 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		return nil, errors.New("subject_id is required")
 	}
 
-	exists, err := l.svcCtx.SubjectRepo.ExistsAccessible(l.ctx, subjectID, auth.MockCurrentUserID)
+	user, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	exists, err := l.svcCtx.SubjectRepo.ExistsAccessible(l.ctx, subjectID, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +96,12 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 	documentModel := &model.Document{
 		ID:        docID,
 		SubjectID: subjectID,
-		UserID:    auth.MockCurrentUserID,
+		UserID:    user.ID,
 		Filename:  filename,
 		FileType:  ext,
 		FileSize:  header.Size,
 		FileURL:   fileURL,
-		Status:    "uploaded",
+		Status:    model.DocumentStatusUploaded,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -102,13 +109,21 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		ID:        uuid.NewString(),
 		DocID:     docID,
 		SubjectID: subjectID,
-		UserID:    auth.MockCurrentUserID,
-		TaskType:  "parse",
-		Status:    "pending",
+		UserID:    user.ID,
+		TaskType:  model.TaskTypeParse,
+		Status:    model.TaskStatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 	if err := l.svcCtx.DocumentRepo.CreateWithIndexTask(l.ctx, documentModel, indexTask); err != nil {
+		return nil, err
+	}
+
+	payload, err := json.Marshal(task.Message{DocID: docID})
+	if err != nil {
+		return nil, err
+	}
+	if err := l.svcCtx.Nats.Publish(model.TaskTypeParse, payload); err != nil {
 		return nil, err
 	}
 

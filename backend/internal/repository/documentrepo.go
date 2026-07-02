@@ -9,4 +9,8 @@ import (
 type DocumentRepository interface {
 	CreateWithIndexTask(ctx context.Context, document *model.Document, task *model.IndexTask) error
 	ListByUser(ctx context.Context, filter model.DocumentListFilter) ([]model.Document, int64, error)
+	GetByID(ctx context.Context, docID string) (*model.Document, error)
+	UpdateParseResult(ctx context.Context, docID, status, plainText string, metadata []byte, errMsg string) error
+	UpdateStatus(ctx context.Context, docID, status, errMsg string) error
+	AddParseLog(ctx context.Context, log *model.DocumentParseLog) error
 }

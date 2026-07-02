@@ -41,12 +41,16 @@ func (l *SubjectCreateLogic) SubjectCreate(req *types.SubjectCreateReq) (resp *t
 	id := uuid.NewString()
 	now := time.Now()
 	visibility := normalizeVisibility(req.Visibility)
+	user, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	subject := &model.Subject{
 		ID:          id,
 		Name:        name,
 		Description: strings.TrimSpace(req.Description),
-		OwnerID:     auth.MockCurrentUserID,
+		OwnerID:     user.ID,
 		Visibility:  visibility,
 		CreatedAt:   now,
 		UpdatedAt:   now,

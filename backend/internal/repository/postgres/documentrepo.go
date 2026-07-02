@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -44,16 +45,17 @@ func (r *DocumentRepo) CreateWithIndexTask(ctx context.Context, document *model.
 
 	if _, err := tx.Exec(
 		ctx,
-		`INSERT INTO index_tasks (id, doc_id, subject_id, user_id, task_type, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO index_tasks (id, doc_id, subject_id, user_id, task_type, status, retry_count, error_message, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
 		task.ID,
 		task.DocID,
 		task.SubjectID,
 		task.UserID,
 		task.TaskType,
 		task.Status,
+		task.RetryCount,
+		sql.NullString{String: task.ErrorMessage, Valid: task.ErrorMessage != ""},
 		task.CreatedAt,
-		task.UpdatedAt,
 	); err != nil {
 		_ = tx.Rollback(ctx)
 		return err
@@ -125,4 +127,85 @@ func (r *DocumentRepo) ListByUser(ctx context.Context, filter model.DocumentList
 	}
 
 	return documents, total, nil
+}
+
+func (r *DocumentRepo) GetByID(ctx context.Context, docID string) (*model.Document, error) {
+	var (
+		document     model.Document
+		plainText    sql.NullString
+		metadata     []byte
+		errorMessage sql.NullString
+	)
+	err := r.db.QueryRow(
+		ctx,
+		`SELECT id::text, subject_id::text, user_id::text, filename, file_type, file_size, file_url, status,
+		        plain_text, metadata, error_message, created_at, updated_at
+		 FROM documents
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		docID,
+	).Scan(
+		&document.ID,
+		&document.SubjectID,
+		&document.UserID,
+		&document.Filename,
+		&document.FileType,
+		&document.FileSize,
+		&document.FileURL,
+		&document.Status,
+		&plainText,
+		&metadata,
+		&errorMessage,
+		&document.CreatedAt,
+		&document.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	document.PlainText = plainText.String
+	document.Metadata = metadata
+	document.ErrorMessage = errorMessage.String
+	return &document, nil
+}
+
+func (r *DocumentRepo) UpdateParseResult(ctx context.Context, docID, status, plainText string, metadata []byte, errMsg string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`UPDATE documents
+		 SET status = $2, plain_text = $3, metadata = $4, error_message = $5, updated_at = now()
+		 WHERE id = $1`,
+		docID,
+		status,
+		sql.NullString{String: plainText, Valid: plainText != ""},
+		metadata,
+		sql.NullString{String: errMsg, Valid: errMsg != ""},
+	)
+	return err
+}
+
+func (r *DocumentRepo) UpdateStatus(ctx context.Context, docID, status, errMsg string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`UPDATE documents
+		 SET status = $2, error_message = $3, updated_at = now()
+		 WHERE id = $1`,
+		docID,
+		status,
+		sql.NullString{String: errMsg, Valid: errMsg != ""},
+	)
+	return err
+}
+
+func (r *DocumentRepo) AddParseLog(ctx context.Context, log *model.DocumentParseLog) error {
+	_, err := r.db.Exec(
+		ctx,
+		`INSERT INTO document_parse_logs (id, doc_id, status, message, error_message, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		log.ID,
+		log.DocID,
+		log.Status,
+		sql.NullString{String: log.Message, Valid: log.Message != ""},
+		sql.NullString{String: log.Error, Valid: log.Error != ""},
+		log.CreatedAt,
+	)
+	return err
 }

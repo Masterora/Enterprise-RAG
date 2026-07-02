@@ -12,6 +12,7 @@ type Config struct {
 	NATS      NATSConf
 	MinIO     MinIOConf
 	Milvus    MilvusConf
+	Auth      AuthConf
 	LLM       ProviderConf
 	Embedding EmbeddingConf
 }
@@ -46,6 +47,11 @@ type MilvusConf struct {
 	IndexType  string
 	TopK       int
 	MinScore   float64
+}
+
+type AuthConf struct {
+	AccessSecret string
+	ExpireHours  int
 }
 
 type ProviderConf struct {

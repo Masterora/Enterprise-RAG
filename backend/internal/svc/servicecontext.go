@@ -6,8 +6,11 @@ package svc
 import (
 	"context"
 	"enterprise-rag/backend/internal/config"
+	"enterprise-rag/backend/internal/infrastructure/embedding"
+	milvusinfra "enterprise-rag/backend/internal/infrastructure/milvus"
 	minioinfra "enterprise-rag/backend/internal/infrastructure/minio"
 	"enterprise-rag/backend/internal/infrastructure/postgres"
+	"enterprise-rag/backend/internal/middleware"
 	"enterprise-rag/backend/internal/repository"
 	pgrepo "enterprise-rag/backend/internal/repository/postgres"
 	"log"
@@ -15,13 +18,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/nats-io/nats.go"
 )
 
 type ServiceContext struct {
-	Config       config.Config
-	MinIO        *minio.Client
-	SubjectRepo  repository.SubjectRepository
-	DocumentRepo repository.DocumentRepository
+	Config         config.Config
+	DB             *pgxpool.Pool
+	MinIO          *minio.Client
+	Nats           *nats.Conn
+	Embedder       embedding.Embedder
+	MilvusStore    *milvusinfra.Store
+	AuthMiddleware *middleware.AuthMiddleware
+	UserRepo       repository.UserRepository
+	SubjectRepo    repository.SubjectRepository
+	DocumentRepo   repository.DocumentRepository
+	ChunkRepo      repository.ChunkRepository
+	IndexTaskRepo  repository.IndexTaskRepository
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -44,10 +56,31 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		log.Fatalf("initialize minio: %v", err)
 	}
 
+	nc, err := nats.Connect(c.NATS.Url)
+	if err != nil {
+		log.Fatalf("connect nats: %v", err)
+	}
+	embedder, err := embedding.NewEmbedder(c.Embedding)
+	if err != nil {
+		log.Fatalf("initialize embedder: %v", err)
+	}
+	milvusStore, err := milvusinfra.NewStore(context.Background(), c.Milvus)
+	if err != nil {
+		log.Fatalf("initialize milvus store: %v", err)
+	}
+
 	return &ServiceContext{
-		Config:       c,
-		MinIO:        minioClient,
-		SubjectRepo:  pgrepo.NewSubjectRepo(db),
-		DocumentRepo: pgrepo.NewDocumentRepo(db),
+		Config:         c,
+		DB:             db,
+		MinIO:          minioClient,
+		Nats:           nc,
+		Embedder:       embedder,
+		MilvusStore:    milvusStore,
+		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth),
+		UserRepo:       pgrepo.NewUserRepo(db),
+		SubjectRepo:    pgrepo.NewSubjectRepo(db),
+		DocumentRepo:   pgrepo.NewDocumentRepo(db),
+		ChunkRepo:      pgrepo.NewChunkRepo(db),
+		IndexTaskRepo:  pgrepo.NewIndexTaskRepo(db),
 	}
 }
