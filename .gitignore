@@ -1,0 +1,23 @@
+# Logs
+*.log
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Go
+*.test
+coverage.out
+
+# Local runtime data
+.env
+.env.*
+!.env.example

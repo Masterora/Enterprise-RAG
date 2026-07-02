@@ -1,0 +1,10 @@
+syntax = "v1"
+
+info (
+	title:  "Enterprise RAG API"
+	desc:   "Enterprise knowledge base RAG API"
+	author: "Enterprise-RAG"
+)
+
+service rag-api {
+}

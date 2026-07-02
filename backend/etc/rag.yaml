@@ -1,0 +1,41 @@
+Name: rag-api
+Host: 0.0.0.0
+Port: 8888
+
+Postgres:
+  DataSource: postgres://rag:rag@localhost:5432/rag?sslmode=disable
+
+Redis:
+  Host: localhost:6379
+  Pass: ""
+  Type: node
+
+NATS:
+  Url: nats://localhost:4222
+
+MinIO:
+  Endpoint: localhost:9000
+  AccessKey: minioadmin
+  SecretKey: minioadmin
+  Bucket: rag-documents
+  UseSSL: false
+
+Milvus:
+  Address: localhost:19530
+  Collection: document_vectors
+  Dimension: 1536
+  MetricType: COSINE
+  IndexType: HNSW
+  TopK: 5
+  MinScore: 0.65
+
+LLM:
+  Provider: qwen
+  Model: qwen-plus
+  ApiKey: ${QWEN_API_KEY}
+
+Embedding:
+  Provider: openai
+  Model: text-embedding-3-small
+  Dimension: 1536
+  ApiKey: ${OPENAI_API_KEY}

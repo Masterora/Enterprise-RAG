@@ -1,0 +1,167 @@
+:root {
+  color: #1e2528;
+  background: #f4f7f4;
+  font-family: Aptos, "Satoshi", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sider {
+  border-right: 1px solid #d9e0d7;
+}
+
+.app-brand {
+  border-bottom: 1px solid #d9e0d7;
+  padding: 20px;
+}
+
+.app-brand-title {
+  color: #1f3d37;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.app-brand-subtitle {
+  color: #6d7c74;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.app-header {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #dfe6dd;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+.app-content {
+  background:
+    linear-gradient(120deg, rgba(219, 232, 204, 0.7), rgba(244, 247, 244, 0) 38%),
+    #f4f7f4;
+  padding: 24px;
+}
+
+.dashboard-page {
+  margin: 0 auto;
+  max-width: 1180px;
+}
+
+.page-title {
+  color: #172521;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.page-subtitle {
+  color: #63716b;
+  margin: 8px 0 0;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.metric-card {
+  background: #ffffff;
+  border: 1px solid #dfe6dd;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.metric-label {
+  color: #63716b;
+  font-size: 13px;
+}
+
+.metric-value {
+  color: #172521;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 12px;
+}
+
+.status-panel {
+  background: #ffffff;
+  border: 1px solid #dfe6dd;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 20px;
+}
+
+.login-page {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(174, 205, 180, 0.9), rgba(244, 247, 244, 0.95)),
+    #f4f7f4;
+  display: flex;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-panel {
+  background: #ffffff;
+  border: 1px solid #dfe6dd;
+  border-radius: 8px;
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 28px;
+  width: 100%;
+}
+
+.login-title {
+  color: #172521;
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.login-desc {
+  color: #63716b;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 900px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .app-content {
+    padding: 16px;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
