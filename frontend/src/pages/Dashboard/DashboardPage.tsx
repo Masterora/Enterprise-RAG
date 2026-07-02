@@ -1,13 +1,32 @@
 import { Space, Typography } from 'antd'
-
-const metrics = [
-  { label: '知识库', value: '0' },
-  { label: '文档', value: '0' },
-  { label: '索引任务', value: '0' },
-  { label: '会话', value: '0' },
-]
+import { useEffect, useState } from 'react'
+import { listDocuments } from '../../api/documents'
+import { listSubjects } from '../../api/subjects'
 
 export function DashboardPage() {
+  const [subjectTotal, setSubjectTotal] = useState(0)
+  const [documentTotal, setDocumentTotal] = useState(0)
+
+  useEffect(() => {
+    async function loadMetrics() {
+      const [subjects, documents] = await Promise.all([
+        listSubjects({ page: 1, page_size: 1 }),
+        listDocuments({ page: 1, page_size: 1 }),
+      ])
+      setSubjectTotal(subjects.total)
+      setDocumentTotal(documents.total)
+    }
+
+    void loadMetrics()
+  }, [])
+
+  const metrics = [
+    { label: '知识库', value: String(subjectTotal) },
+    { label: '文档', value: String(documentTotal) },
+    { label: '索引任务', value: '0' },
+    { label: '会话', value: '0' },
+  ]
+
   return (
     <div className="dashboard-page">
       <Space direction="vertical" size={4}>
@@ -27,7 +46,7 @@ export function DashboardPage() {
       <div className="status-panel">
         <Typography.Title level={4}>系统概览</Typography.Title>
         <Typography.Paragraph>
-          当前系统暂无业务数据。创建知识库并上传文档后，这里会展示索引进度和问答使用情况。
+          可以先创建知识库，再上传文档。文档上传后会进入 uploaded 状态，后续接入解析和向量化任务。
         </Typography.Paragraph>
       </div>
     </div>

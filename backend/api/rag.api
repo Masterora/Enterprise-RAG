@@ -6,5 +6,98 @@ info (
 	author: "Enterprise-RAG"
 )
 
+// Shared types
+type SubjectInfo {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Visibility  string `json:"visibility"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type DocumentInfo {
+	ID        string `json:"id"`
+	SubjectID string `json:"subject_id"`
+	Filename  string `json:"filename"`
+	FileType  string `json:"file_type"`
+	FileSize  int64  `json:"file_size"`
+	FileURL   string `json:"file_url"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// Subject module
+type SubjectCreateReq {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectCreateResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectListReq {
+	Keyword  string `json:"keyword,optional"`
+	Page     int    `json:"page,optional"`
+	PageSize int    `json:"page_size,optional"`
+}
+
+type SubjectListResp {
+	List  []SubjectInfo `json:"list"`
+	Total int64         `json:"total"`
+}
+
+type SubjectDetailReq {
+	ID string `json:"id"`
+}
+
+type SubjectDetailResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+// Document module
+type DocumentUploadResp {
+	Document DocumentInfo `json:"document"`
+}
+
+type DocumentListReq {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	Keyword   string `json:"keyword,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type DocumentListResp {
+	List  []DocumentInfo `json:"list"`
+	Total int64          `json:"total"`
+}
+
+@server (
+	group: subject
+)
 service rag-api {
+	@handler SubjectCreateHandler
+	post /api/subjects/create (SubjectCreateReq) returns (SubjectCreateResp)
+
+	@handler SubjectListHandler
+	post /api/subjects/list (SubjectListReq) returns (SubjectListResp)
+
+	@handler SubjectDetailHandler
+	post /api/subjects/detail (SubjectDetailReq) returns (SubjectDetailResp)
+}
+
+@server (
+	group: document
+)
+service rag-api {
+	// multipart/form-data: subject_id + file
+	@handler DocumentUploadHandler
+	post /api/documents/upload returns (DocumentUploadResp)
+
+	@handler DocumentListHandler
+	post /api/documents/list (DocumentListReq) returns (DocumentListResp)
 }

@@ -4,12 +4,48 @@
 package handler
 
 import (
+	"net/http"
+
+	document "enterprise-rag/backend/internal/handler/document"
+	subject "enterprise-rag/backend/internal/handler/subject"
 	"enterprise-rag/backend/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
-	_ = server
-	_ = serverCtx
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/documents/list",
+				Handler: document.DocumentListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/documents/upload",
+				Handler: document.DocumentUploadHandler(serverCtx),
+			},
+		},
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/subjects/create",
+				Handler: subject.SubjectCreateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/subjects/detail",
+				Handler: subject.SubjectDetailHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/subjects/list",
+				Handler: subject.SubjectListHandler(serverCtx),
+			},
+		},
+	)
 }

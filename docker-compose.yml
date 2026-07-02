@@ -1,3 +1,5 @@
+name: enterprise-rag
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,7 +8,7 @@ services:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,17 +48,6 @@ services:
     volumes:
       - minio_data:/data
 
-  createbuckets:
-    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
-      mc mb --ignore-existing local/rag-documents;
-      mc mb --ignore-existing local/milvus-bucket;
-      "
-
   etcd:
     image: quay.io/coreos/etcd:v3.5.18
     environment:
@@ -84,8 +75,8 @@ services:
     depends_on:
       etcd:
         condition: service_started
-      createbuckets:
-        condition: service_completed_successfully
+      minio:
+        condition: service_started
     ports:
       - "19530:19530"
       - "9091:9091"

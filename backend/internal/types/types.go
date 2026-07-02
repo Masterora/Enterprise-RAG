@@ -2,3 +2,70 @@
 // goctl 1.10.1
 
 package types
+
+type DocumentInfo struct {
+	ID        string `json:"id"`
+	SubjectID string `json:"subject_id"`
+	Filename  string `json:"filename"`
+	FileType  string `json:"file_type"`
+	FileSize  int64  `json:"file_size"`
+	FileURL   string `json:"file_url"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type DocumentListReq struct {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	Keyword   string `json:"keyword,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type DocumentListResp struct {
+	List  []DocumentInfo `json:"list"`
+	Total int64          `json:"total"`
+}
+
+type DocumentUploadResp struct {
+	Document DocumentInfo `json:"document"`
+}
+
+type SubjectCreateReq struct {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectCreateResp struct {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectDetailReq struct {
+	ID string `json:"id"`
+}
+
+type SubjectDetailResp struct {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Visibility  string `json:"visibility"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type SubjectListReq struct {
+	Keyword  string `json:"keyword,optional"`
+	Page     int    `json:"page,optional"`
+	PageSize int    `json:"page_size,optional"`
+}
+
+type SubjectListResp struct {
+	List  []SubjectInfo `json:"list"`
+	Total int64         `json:"total"`
+}

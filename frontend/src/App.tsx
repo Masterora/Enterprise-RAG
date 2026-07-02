@@ -6,11 +6,16 @@ import { DocumentsPage } from './pages/Documents/DocumentsPage'
 import { LoginPage } from './pages/Login/LoginPage'
 import { SubjectsPage } from './pages/Subjects/SubjectsPage'
 
-export default function App() {
+type AppProps = {
+  isDarkMode: boolean
+  onToggleTheme: () => void
+}
+
+export default function App({ isDarkMode, onToggleTheme }: AppProps) {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route element={<AppLayout />}>
+      <Route element={<AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme} />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/subjects" element={<SubjectsPage />} />
         <Route path="/documents" element={<DocumentsPage />} />

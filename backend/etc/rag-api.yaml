@@ -1,9 +1,9 @@
 Name: rag-api
 Host: 0.0.0.0
-Port: 8888
+Port: 9999
 
 Postgres:
-  DataSource: postgres://rag:rag@localhost:5432/rag?sslmode=disable
+  DataSource: postgres://rag:rag@localhost:55432/rag?sslmode=disable
 
 Redis:
   Host: localhost:6379

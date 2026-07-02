@@ -8,11 +8,17 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+[data-theme='dark'] {
+  color: #f5f5f5;
+  background: #141414;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
+  background: inherit;
   margin: 0;
   min-width: 320px;
 }
@@ -26,32 +32,34 @@ a {
   min-height: 100vh;
 }
 
+.theme-light {
+  color: #1e2528;
+}
+
+.theme-dark {
+  color: #f5f5f5;
+}
+
 .app-sider {
-  border-right: 1px solid #d9e0d7;
 }
 
 .app-brand {
-  border-bottom: 1px solid #d9e0d7;
   padding: 20px;
 }
 
 .app-brand-title {
-  color: #1f3d37;
   font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .app-brand-subtitle {
-  color: #6d7c74;
   font-size: 12px;
   margin-top: 4px;
 }
 
 .app-header {
   align-items: center;
-  background: #ffffff;
-  border-bottom: 1px solid #dfe6dd;
   display: flex;
   justify-content: space-between;
   padding: 0 24px;
@@ -62,6 +70,32 @@ a {
     linear-gradient(120deg, rgba(219, 232, 204, 0.7), rgba(244, 247, 244, 0) 38%),
     #f4f7f4;
   padding: 24px;
+}
+
+.theme-dark .app-content {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), rgba(20, 20, 20, 0) 32%),
+    linear-gradient(180deg, #141414, #111111);
+}
+
+.theme-dark .page-title,
+.theme-dark .metric-value,
+.theme-dark .login-title {
+  color: #f5f5f5;
+}
+
+.theme-dark .page-subtitle,
+.theme-dark .metric-label,
+.theme-dark .login-desc {
+  color: #bfbfbf;
+}
+
+.theme-dark .metric-card,
+.theme-dark .status-panel,
+.theme-dark .login-panel {
+  background: #1f1f1f;
+  border-color: #303030;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .dashboard-page {
@@ -81,6 +115,19 @@ a {
 .page-subtitle {
   color: #63716b;
   margin: 8px 0 0;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 180px;
 }
 
 .metric-grid {
@@ -159,6 +206,10 @@ a {
 @media (max-width: 640px) {
   .app-content {
     padding: 16px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .metric-grid {

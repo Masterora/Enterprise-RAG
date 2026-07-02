@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     username VARCHAR(100) NOT NULL,
     email VARCHAR(255),
@@ -8,7 +8,7 @@ CREATE TABLE users (
     deleted_at TIMESTAMP
 );
 
-CREATE TABLE subjects (
+CREATE TABLE IF NOT EXISTS subjects (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE subjects (
     deleted_at TIMESTAMP
 );
 
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY,
     subject_id UUID NOT NULL,
     user_id UUID NOT NULL,
@@ -36,11 +36,11 @@ CREATE TABLE documents (
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     deleted_at TIMESTAMP
 );
-CREATE INDEX idx_documents_subject_id ON documents(subject_id);
-CREATE INDEX idx_documents_user_id ON documents(user_id);
-CREATE INDEX idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_subject_id ON documents(subject_id);
+CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 
-CREATE TABLE document_chunks (
+CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY,
     doc_id UUID NOT NULL,
     subject_id UUID NOT NULL,
@@ -56,12 +56,12 @@ CREATE TABLE document_chunks (
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     deleted_at TIMESTAMP
 );
-CREATE INDEX idx_document_chunks_doc_id ON document_chunks(doc_id);
-CREATE INDEX idx_document_chunks_subject_id ON document_chunks(subject_id);
-CREATE INDEX idx_document_chunks_user_id ON document_chunks(user_id);
-CREATE INDEX idx_document_chunks_index_version ON document_chunks(index_version);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_subject_id ON document_chunks(subject_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_user_id ON document_chunks(user_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_index_version ON document_chunks(index_version);
 
-CREATE TABLE chat_sessions (
+CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     subject_id UUID,
@@ -71,7 +71,7 @@ CREATE TABLE chat_sessions (
     deleted_at TIMESTAMP
 );
 
-CREATE TABLE chat_messages (
+CREATE TABLE IF NOT EXISTS chat_messages (
     id UUID PRIMARY KEY,
     session_id UUID NOT NULL,
     user_id UUID NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE chat_messages (
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE TABLE index_tasks (
+CREATE TABLE IF NOT EXISTS index_tasks (
     id UUID PRIMARY KEY,
     doc_id UUID,
     subject_id UUID,
@@ -95,11 +95,11 @@ CREATE TABLE index_tasks (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_index_tasks_doc_id ON index_tasks(doc_id);
-CREATE INDEX idx_index_tasks_status ON index_tasks(status);
-CREATE INDEX idx_index_tasks_task_type ON index_tasks(task_type);
+CREATE INDEX IF NOT EXISTS idx_index_tasks_doc_id ON index_tasks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_index_tasks_status ON index_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_index_tasks_task_type ON index_tasks(task_type);
 
-CREATE TABLE document_parse_logs (
+CREATE TABLE IF NOT EXISTS document_parse_logs (
     id UUID PRIMARY KEY,
     doc_id UUID NOT NULL,
     status VARCHAR(50) NOT NULL,

@@ -1,19 +1,34 @@
-import { BookOutlined, DashboardOutlined, FileTextOutlined, MessageOutlined } from '@ant-design/icons'
-import { Layout, Menu, Space, Typography } from 'antd'
+import { BookOutlined, DashboardOutlined, FileTextOutlined, MessageOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
+import { Button, Layout, Menu, Space, Typography, theme } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 const { Header, Sider, Content } = Layout
 
-export function AppLayout() {
+type AppLayoutProps = {
+  isDarkMode: boolean
+  onToggleTheme: () => void
+}
+
+export function AppLayout({ isDarkMode, onToggleTheme }: AppLayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { token } = theme.useToken()
 
   return (
-    <Layout className="app-shell">
-      <Sider className="app-sider" theme="light" width={232}>
-        <div className="app-brand">
-          <div className="app-brand-title">Enterprise RAG</div>
-          <div className="app-brand-subtitle">Knowledge Console</div>
+    <Layout className={`app-shell ${isDarkMode ? 'theme-dark' : 'theme-light'}`}>
+      <Sider
+        className="app-sider"
+        theme={isDarkMode ? 'dark' : 'light'}
+        width={232}
+        style={{ borderRight: `1px solid ${token.colorBorder}` }}
+      >
+        <div className="app-brand" style={{ borderBottom: `1px solid ${token.colorBorder}` }}>
+          <div className="app-brand-title" style={{ color: token.colorText }}>
+            Enterprise RAG
+          </div>
+          <div className="app-brand-subtitle" style={{ color: token.colorTextSecondary }}>
+            Knowledge Console
+          </div>
         </div>
         <Menu
           mode="inline"
@@ -28,10 +43,25 @@ export function AppLayout() {
         />
       </Sider>
       <Layout>
-        <Header className="app-header">
-          <Typography.Text strong>企业知识库 RAG 问答系统</Typography.Text>
+        <Header
+          className="app-header"
+          style={{
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorder}`,
+          }}
+        >
+          <Typography.Text strong style={{ color: token.colorText }}>
+            企业知识库 RAG 问答系统
+          </Typography.Text>
           <Space>
-            <Typography.Text type="secondary">local</Typography.Text>
+            <Button
+              icon={isDarkMode ? <MoonOutlined /> : <SunOutlined />}
+              onClick={onToggleTheme}
+              type="text"
+              style={{ color: token.colorText }}
+            >
+              {isDarkMode ? 'Dark' : 'Light'}
+            </Button>
           </Space>
         </Header>
         <Content className="app-content">
