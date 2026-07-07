@@ -16,9 +16,23 @@ func NewEmbedder(c config.EmbeddingConf) (Embedder, error) {
 	switch strings.ToLower(strings.TrimSpace(c.Provider)) {
 	case "openai":
 		return NewOpenAIClient(c.ApiKey, c.Model), nil
+	case "qwen":
+		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1"), c.Dimension), nil
+	case "openrouter":
+		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://openrouter.ai/api/v1"), c.Dimension), nil
+	case "openai_compatible":
+		return NewOpenAICompatibleClient(c.ApiKey, c.Model, c.BaseURL, c.Dimension), nil
 	case "mock":
 		return NewMockEmbedder(c.Dimension), nil
 	default:
 		return nil, errors.New("unsupported embedding provider")
 	}
+}
+
+func defaultString(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
 }

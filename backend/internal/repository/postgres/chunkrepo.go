@@ -92,3 +92,40 @@ func (r *ChunkRepo) ListByDocument(ctx context.Context, docID string) ([]model.D
 	}
 	return chunks, rows.Err()
 }
+
+func (r *ChunkRepo) ListBySubject(ctx context.Context, subjectID string) ([]model.DocumentChunk, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT id::text, doc_id::text, subject_id::text, user_id::text, chunk_index, content, COALESCE(page, 0), COALESCE(section, ''), COALESCE(token_count, 0), created_at, updated_at
+		 FROM document_chunks
+		 WHERE subject_id = $1 AND deleted_at IS NULL
+		 ORDER BY chunk_index ASC`,
+		subjectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	chunks := make([]model.DocumentChunk, 0)
+	for rows.Next() {
+		var chunk model.DocumentChunk
+		if err := rows.Scan(
+			&chunk.ID,
+			&chunk.DocID,
+			&chunk.SubjectID,
+			&chunk.UserID,
+			&chunk.ChunkIndex,
+			&chunk.Content,
+			&chunk.Page,
+			&chunk.Section,
+			&chunk.TokenCount,
+			&chunk.CreatedAt,
+			&chunk.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, chunk)
+	}
+	return chunks, rows.Err()
+}

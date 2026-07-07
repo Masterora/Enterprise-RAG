@@ -28,7 +28,12 @@ func NewUserMeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserMeLogi
 }
 
 func (l *UserMeLogic) UserMe() (resp *types.UserMeResp, err error) {
-	user, err := auth.CurrentUser(l.ctx)
+	session, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := l.svcCtx.UserRepo.GetByID(l.ctx, session.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +42,9 @@ func (l *UserMeLogic) UserMe() (resp *types.UserMeResp, err error) {
 		User: types.UserInfo{
 			ID:       user.ID,
 			Username: user.Username,
+			Nickname: user.Nickname,
 			Email:    user.Email,
+			Language: user.Language,
 		},
 	}, nil
 }

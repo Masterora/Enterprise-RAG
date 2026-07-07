@@ -139,6 +139,37 @@ func (s *Store) Search(ctx context.Context, subjectID string, vector []float32, 
 	return chunks, nil
 }
 
+func (s *Store) DeleteByDocIDs(ctx context.Context, userID string, docIDs []string) error {
+	if len(docIDs) == 0 {
+		return nil
+	}
+
+	quoted := make([]string, 0, len(docIDs))
+	for _, docID := range docIDs {
+		docID = strings.TrimSpace(docID)
+		if docID == "" {
+			continue
+		}
+		quoted = append(quoted, fmt.Sprintf(`"%s"`, escapeFilterValue(docID)))
+	}
+	if len(quoted) == 0 {
+		return nil
+	}
+
+	filter := fmt.Sprintf(`user_id == "%s" AND doc_id in [%s]`, escapeFilterValue(userID), strings.Join(quoted, ", "))
+	return s.deleteByFilter(ctx, filter)
+}
+
+func (s *Store) DeleteBySubject(ctx context.Context, userID, subjectID string) error {
+	subjectID = strings.TrimSpace(subjectID)
+	if subjectID == "" {
+		return nil
+	}
+
+	filter := fmt.Sprintf(`user_id == "%s" AND subject_id == "%s"`, escapeFilterValue(userID), escapeFilterValue(subjectID))
+	return s.deleteByFilter(ctx, filter)
+}
+
 func (s *Store) hasCollection(ctx context.Context) (bool, error) {
 	var collections []string
 	if err := s.doWithResponse(ctx, "/v2/vectordb/collections/list", map[string]any{}, &collections); err != nil {
@@ -193,11 +224,22 @@ func (s *Store) doWithResponse(ctx context.Context, path string, payload any, re
 	return nil
 }
 
+func (s *Store) deleteByFilter(ctx context.Context, filter string) error {
+	return s.do(ctx, "/v2/vectordb/entities/delete", map[string]any{
+		"collectionName": s.config.Collection,
+		"filter":         filter,
+	})
+}
+
 func normalizeBaseURL(address string) string {
 	if strings.HasPrefix(address, "http://") || strings.HasPrefix(address, "https://") {
 		return address
 	}
 	return "http://" + address
+}
+
+func escapeFilterValue(value string) string {
+	return strings.ReplaceAll(value, `"`, `\"`)
 }
 
 func asString(value any) string {

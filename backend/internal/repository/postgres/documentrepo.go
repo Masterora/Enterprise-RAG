@@ -65,36 +65,41 @@ func (r *DocumentRepo) CreateWithIndexTask(ctx context.Context, document *model.
 }
 
 func (r *DocumentRepo) ListByUser(ctx context.Context, filter model.DocumentListFilter) ([]model.Document, int64, error) {
-	conditions := []string{"deleted_at IS NULL", "user_id = $1"}
+	conditions := []string{"d.deleted_at IS NULL", "d.user_id = $1", "s.deleted_at IS NULL"}
 	args := []any{filter.UserID}
 
 	if filter.SubjectID != "" {
 		args = append(args, filter.SubjectID)
-		conditions = append(conditions, fmt.Sprintf("subject_id = $%d", len(args)))
+		conditions = append(conditions, fmt.Sprintf("d.subject_id = $%d", len(args)))
 	}
 	if filter.Status != "" {
 		args = append(args, filter.Status)
-		conditions = append(conditions, fmt.Sprintf("status = $%d", len(args)))
+		conditions = append(conditions, fmt.Sprintf("d.status = $%d", len(args)))
 	}
 	if filter.Keyword != "" {
 		args = append(args, "%"+filter.Keyword+"%")
-		conditions = append(conditions, fmt.Sprintf("filename ILIKE $%d", len(args)))
+		conditions = append(conditions, fmt.Sprintf("d.filename ILIKE $%d", len(args)))
 	}
 
 	where := strings.Join(conditions, " AND ")
 
 	var total int64
-	if err := r.db.QueryRow(ctx, "SELECT count(*) FROM documents WHERE "+where, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(
+		ctx,
+		"SELECT count(*) FROM documents d JOIN subjects s ON s.id = d.subject_id WHERE "+where,
+		args...,
+	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	args = append(args, filter.PageSize, filter.Offset)
 	rows, err := r.db.Query(
 		ctx,
-		fmt.Sprintf(`SELECT id::text, subject_id::text, user_id::text, filename, file_type, file_size, file_url, status, created_at, updated_at
-			FROM documents
+		fmt.Sprintf(`SELECT d.id::text, d.subject_id::text, d.user_id::text, d.filename, d.file_type, d.file_size, d.file_url, d.status, d.created_at, d.updated_at
+			FROM documents d
+			JOIN subjects s ON s.id = d.subject_id
 			WHERE %s
-			ORDER BY created_at DESC
+			ORDER BY d.created_at DESC
 			LIMIT $%d OFFSET $%d`, where, len(args)-1, len(args)),
 		args...,
 	)
@@ -208,4 +213,73 @@ func (r *DocumentRepo) AddParseLog(ctx context.Context, log *model.DocumentParse
 		log.CreatedAt,
 	)
 	return err
+}
+
+func (r *DocumentRepo) ListActiveFailedDocIDsByUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := r.db.Query(
+		ctx,
+		`SELECT id::text
+		 FROM documents
+		 WHERE user_id = $1 AND status = $2 AND deleted_at IS NULL`,
+		userID,
+		model.DocumentStatusFailed,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return ids, nil
+}
+
+func (r *DocumentRepo) ClearFailedByUser(ctx context.Context, userID string) (int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`UPDATE document_chunks
+		 SET deleted_at = now(), updated_at = now()
+		 WHERE doc_id IN (
+		   SELECT id
+		   FROM documents
+		   WHERE user_id = $1 AND status = $2 AND deleted_at IS NULL
+		 )
+		 AND deleted_at IS NULL`,
+		userID,
+		model.DocumentStatusFailed,
+	); err != nil {
+		_ = tx.Rollback(ctx)
+		return 0, err
+	}
+
+	result, err := tx.Exec(
+		ctx,
+		`UPDATE documents
+		 SET deleted_at = now(), updated_at = now()
+		 WHERE user_id = $1 AND status = $2 AND deleted_at IS NULL`,
+		userID,
+		model.DocumentStatusFailed,
+	)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

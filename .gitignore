@@ -16,6 +16,7 @@ dist-ssr/
 # Go
 *.test
 coverage.out
+backend/.cache/
 
 # Local runtime data
 .env

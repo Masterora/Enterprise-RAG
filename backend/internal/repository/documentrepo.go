@@ -13,4 +13,6 @@ type DocumentRepository interface {
 	UpdateParseResult(ctx context.Context, docID, status, plainText string, metadata []byte, errMsg string) error
 	UpdateStatus(ctx context.Context, docID, status, errMsg string) error
 	AddParseLog(ctx context.Context, log *model.DocumentParseLog) error
+	ListActiveFailedDocIDsByUser(ctx context.Context, userID string) ([]string, error)
+	ClearFailedByUser(ctx context.Context, userID string) (int64, error)
 }

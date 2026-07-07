@@ -1,19 +1,101 @@
-import { BookOutlined, DashboardOutlined, FileTextOutlined, MessageOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
-import { Button, Layout, Menu, Space, Typography, theme } from 'antd'
+import {
+  BookOutlined,
+  DashboardOutlined,
+  FileTextOutlined,
+  MessageOutlined,
+  MoonOutlined,
+  SettingOutlined,
+  SunOutlined,
+} from '@ant-design/icons'
+import { Button, Dropdown, Layout, Menu, Space, Typography, theme, type MenuProps } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { clearAuthToken } from '../api/auth'
+import { clearAuthToken, getMe, type UserInfo } from '../api/auth'
+import { ActionIconButton } from '../components/ActionIconButton'
+import { isSupportedLanguage } from '../i18n-core'
+import { useI18n } from '../useI18n'
 
 const { Header, Sider, Content } = Layout
 
 type AppLayoutProps = {
   isDarkMode: boolean
   onToggleTheme: () => void
+  onLogout: () => void
 }
 
-export function AppLayout({ isDarkMode, onToggleTheme }: AppLayoutProps) {
+export function AppLayout({ isDarkMode, onToggleTheme, onLogout }: AppLayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { token } = theme.useToken()
+  const { t, setLanguage } = useI18n()
+  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
+
+  useEffect(() => {
+    async function syncLanguage() {
+      try {
+        const user = await getMe()
+        setCurrentUser(user)
+        if (isSupportedLanguage(user.language)) {
+          setLanguage(user.language)
+        }
+      } catch {
+        return
+      }
+    }
+
+    void syncLanguage()
+  }, [setLanguage])
+
+  const displayName = currentUser?.nickname || currentUser?.username || t('common.account')
+
+  const pageMeta = useMemo(() => {
+    if (location.pathname === '/dashboard') {
+      return { title: t('dashboard.title'), subtitle: t('dashboard.subtitle') }
+    }
+    if (location.pathname === '/subjects') {
+      return { title: t('subjects.title'), subtitle: t('subjects.subtitle') }
+    }
+    if (location.pathname === '/documents') {
+      return { title: t('documents.title'), subtitle: t('documents.subtitle') }
+    }
+    if (location.pathname === '/chat') {
+      return { title: t('chat.title'), subtitle: t('chat.subtitle') }
+    }
+    if (location.pathname === '/settings/profile') {
+      return { title: t('settings.profile'), subtitle: t('settings.profileSubtitle') }
+    }
+    if (location.pathname === '/settings/security') {
+      return { title: t('settings.passwordPage'), subtitle: t('settings.passwordSubtitle') }
+    }
+    return { title: t('app.title'), subtitle: t('app.brandSubtitle') }
+  }, [location.pathname, t])
+
+  useEffect(() => {
+    document.title = `${pageMeta.title} - Enterprise-RAG`
+  }, [pageMeta.title])
+
+  const userMenuItems: MenuProps['items'] = [
+    {
+      key: 'switch',
+      label: t('common.switchUser'),
+    },
+    {
+      key: 'logout',
+      label: t('common.logout'),
+    },
+  ]
+
+  function handleLeave() {
+    clearAuthToken()
+    onLogout()
+    navigate('/login')
+  }
+
+  function handleUserMenuClick({ key }: { key: string }) {
+    if (key === 'switch' || key === 'logout') {
+      handleLeave()
+    }
+  }
 
   return (
     <Layout className={`app-shell ${isDarkMode ? 'theme-dark' : 'theme-light'}`}>
@@ -28,17 +110,27 @@ export function AppLayout({ isDarkMode, onToggleTheme }: AppLayoutProps) {
             Enterprise RAG
           </div>
           <div className="app-brand-subtitle" style={{ color: token.colorTextSecondary }}>
-            Knowledge Console
+            {t('app.brandSubtitle')}
           </div>
         </div>
         <Menu
           mode="inline"
+          defaultOpenKeys={location.pathname.startsWith('/settings') ? ['settings-group'] : []}
           selectedKeys={[location.pathname]}
           items={[
-            { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
-            { key: '/subjects', icon: <BookOutlined />, label: '知识库' },
-            { key: '/documents', icon: <FileTextOutlined />, label: '文档' },
-            { key: '/chat', icon: <MessageOutlined />, label: '问答' },
+            { key: '/dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
+            { key: '/subjects', icon: <BookOutlined />, label: t('nav.subjects') },
+            { key: '/documents', icon: <FileTextOutlined />, label: t('nav.documents') },
+            { key: '/chat', icon: <MessageOutlined />, label: t('nav.chat') },
+            {
+              key: 'settings-group',
+              icon: <SettingOutlined />,
+              label: t('nav.settings'),
+              children: [
+                { key: '/settings/profile', label: t('settings.navProfile') },
+                { key: '/settings/security', label: t('settings.navSecurity') },
+              ],
+            },
           ]}
           onClick={({ key }) => navigate(key)}
         />
@@ -51,26 +143,26 @@ export function AppLayout({ isDarkMode, onToggleTheme }: AppLayoutProps) {
             borderBottom: `1px solid ${token.colorBorder}`,
           }}
         >
-          <Typography.Text strong style={{ color: token.colorText }}>
-            企业知识库 RAG 问答系统
-          </Typography.Text>
+          <div className="app-header-copy">
+            <Typography.Text strong className="app-header-title" style={{ color: token.colorText }}>
+              {pageMeta.title}
+            </Typography.Text>
+            <Typography.Text className="app-header-subtitle" style={{ color: token.colorTextSecondary }}>
+              {pageMeta.subtitle}
+            </Typography.Text>
+          </div>
           <Space>
-            <Button
-              onClick={() => {
-                clearAuthToken()
-                navigate('/login')
-              }}
-            >
-              退出
-            </Button>
-            <Button
+            <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} trigger={['click']}>
+              <Button type="text" className="header-user-trigger">
+                {displayName}
+              </Button>
+            </Dropdown>
+            <ActionIconButton
               icon={isDarkMode ? <MoonOutlined /> : <SunOutlined />}
+              label={isDarkMode ? t('common.dark') : t('common.light')}
               onClick={onToggleTheme}
-              type="text"
-              style={{ color: token.colorText }}
-            >
-              {isDarkMode ? 'Dark' : 'Light'}
-            </Button>
+              effect="theme"
+            />
           </Space>
         </Header>
         <Content className="app-content">

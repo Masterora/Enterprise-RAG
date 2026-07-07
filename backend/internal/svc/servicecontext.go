@@ -7,6 +7,7 @@ import (
 	"context"
 	"enterprise-rag/backend/internal/config"
 	"enterprise-rag/backend/internal/infrastructure/embedding"
+	"enterprise-rag/backend/internal/infrastructure/llm"
 	milvusinfra "enterprise-rag/backend/internal/infrastructure/milvus"
 	minioinfra "enterprise-rag/backend/internal/infrastructure/minio"
 	"enterprise-rag/backend/internal/infrastructure/postgres"
@@ -27,6 +28,7 @@ type ServiceContext struct {
 	MinIO          *minio.Client
 	Nats           *nats.Conn
 	Embedder       embedding.Embedder
+	LLM            llm.Client
 	MilvusStore    *milvusinfra.Store
 	AuthMiddleware *middleware.AuthMiddleware
 	UserRepo       repository.UserRepository
@@ -64,6 +66,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		log.Fatalf("initialize embedder: %v", err)
 	}
+	llmClient, err := llm.NewClient(c.LLM)
+	if err != nil {
+		log.Fatalf("initialize llm: %v", err)
+	}
 	milvusStore, err := milvusinfra.NewStore(context.Background(), c.Milvus)
 	if err != nil {
 		log.Fatalf("initialize milvus store: %v", err)
@@ -75,6 +81,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		MinIO:          minioClient,
 		Nats:           nc,
 		Embedder:       embedder,
+		LLM:            llmClient,
 		MilvusStore:    milvusStore,
 		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth),
 		UserRepo:       pgrepo.NewUserRepo(db),

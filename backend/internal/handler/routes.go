@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	auth "enterprise-rag/backend/internal/handler/auth"
+	chat "enterprise-rag/backend/internal/handler/chat"
 	document "enterprise-rag/backend/internal/handler/document"
 	retrieval "enterprise-rag/backend/internal/handler/retrieval"
 	subject "enterprise-rag/backend/internal/handler/subject"
@@ -25,6 +26,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/auth/login",
 				Handler: auth.AuthLoginHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/auth/register",
+				Handler: auth.AuthRegisterHandler(serverCtx),
+			},
 		},
 	)
 
@@ -35,6 +41,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/users/me",
 				Handler: auth.UserMeHandler(serverCtx),
 			},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/users/update",
+				Handler: auth.UserUpdateHandler(serverCtx),
+			},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/users/password/update",
+				Handler: auth.UserPasswordUpdateHandler(serverCtx),
+			},
 		),
 	)
 
@@ -44,6 +60,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/api/documents/list",
 				Handler: document.DocumentListHandler(serverCtx),
+			},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/documents/clear-failed",
+				Handler: document.DocumentClearFailedHandler(serverCtx),
 			},
 			rest.Route{
 				Method:  http.MethodPost,
@@ -59,6 +80,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/api/retrieval/search",
 				Handler: retrieval.RetrievalSearchHandler(serverCtx),
+			},
+		),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/chat/ask",
+				Handler: chat.ChatAskHandler(serverCtx),
+			},
+			rest.Route{
+				Method:  http.MethodPost,
+				Path:    "/api/chat/stream",
+				Handler: chat.ChatStreamHandler(serverCtx),
 			},
 		),
 	)

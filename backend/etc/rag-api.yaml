@@ -34,12 +34,14 @@ Auth:
   ExpireHours: 72
 
 LLM:
-  Provider: qwen
-  Model: qwen-plus
-  ApiKey: ${QWEN_API_KEY}
+  Provider: openrouter
+  Model: openai/gpt-4o-mini
+  ApiKey: ${OPENROUTER_API_KEY}
+  BaseURL: https://openrouter.ai/api/v1
 
 Embedding:
-  Provider: mock
-  Model: text-embedding-3-small
+  Provider: openrouter
+  Model: openai/text-embedding-3-small
   Dimension: 1536
-  ApiKey: ${OPENAI_API_KEY}
+  ApiKey: ${OPENROUTER_API_KEY}
+  BaseURL: https://openrouter.ai/api/v1

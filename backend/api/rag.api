@@ -82,10 +82,20 @@ type AuthLoginReq {
 	Password string `json:"password"`
 }
 
+type AuthRegisterReq {
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+	Nickname        string `json:"nickname,optional"`
+	Email           string `json:"email,optional"`
+}
+
 type UserInfo {
 	ID       string `json:"id"`
 	Username string `json:"username"`
+	Nickname string `json:"nickname"`
 	Email    string `json:"email"`
+	Language string `json:"language"`
 }
 
 type AuthLoginResp {
@@ -95,6 +105,25 @@ type AuthLoginResp {
 
 type UserMeResp {
 	User UserInfo `json:"user"`
+}
+
+type UserUpdateReq {
+	Nickname string `json:"nickname,optional"`
+	Email    string `json:"email,optional"`
+	Language string `json:"language"`
+}
+
+type UserUpdateResp {
+	User UserInfo `json:"user"`
+}
+
+type UserPasswordUpdateReq {
+	OldPassword     string `json:"old_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+type UserPasswordUpdateResp {
 }
 
 // Document module
@@ -115,6 +144,10 @@ type DocumentListResp {
 	Total int64          `json:"total"`
 }
 
+type DocumentClearFailedResp {
+	Deleted int64 `json:"deleted"`
+}
+
 type RetrievalChunk {
 	ID         string  `json:"id"`
 	DocID      string  `json:"doc_id"`
@@ -126,6 +159,8 @@ type RetrievalChunk {
 	Section    string  `json:"section"`
 	Content    string  `json:"content"`
 	Score      float64 `json:"score"`
+	RawScore   float64 `json:"raw_score"`
+	Source     string  `json:"source"`
 }
 
 type RetrievalSearchReq {
@@ -138,6 +173,17 @@ type RetrievalSearchResp {
 	List []RetrievalChunk `json:"list"`
 }
 
+type ChatAskReq {
+	SubjectID string `json:"subject_id"`
+	Query     string `json:"query"`
+	TopK      int    `json:"top_k,optional"`
+}
+
+type ChatAskResp {
+	Answer string           `json:"answer"`
+	Chunks []RetrievalChunk `json:"chunks"`
+}
+
 @server (
 	group: auth
 )
@@ -145,8 +191,17 @@ service rag-api {
 	@handler AuthLoginHandler
 	post /api/auth/login (AuthLoginReq) returns (AuthLoginResp)
 
+	@handler AuthRegisterHandler
+	post /api/auth/register (AuthRegisterReq) returns (AuthLoginResp)
+
 	@handler UserMeHandler
 	post /api/users/me returns (UserMeResp)
+
+	@handler UserUpdateHandler
+	post /api/users/update (UserUpdateReq) returns (UserUpdateResp)
+
+	@handler UserPasswordUpdateHandler
+	post /api/users/password/update (UserPasswordUpdateReq) returns (UserPasswordUpdateResp)
 }
 
 @server (
@@ -179,6 +234,9 @@ service rag-api {
 
 	@handler DocumentListHandler
 	post /api/documents/list (DocumentListReq) returns (DocumentListResp)
+
+	@handler DocumentClearFailedHandler
+	post /api/documents/clear-failed returns (DocumentClearFailedResp)
 }
 
 @server (
@@ -189,3 +247,13 @@ service rag-api {
 	post /api/retrieval/search (RetrievalSearchReq) returns (RetrievalSearchResp)
 }
 
+@server (
+	group: chat
+)
+service rag-api {
+	@handler ChatAskHandler
+	post /api/chat/ask (ChatAskReq) returns (ChatAskResp)
+
+	@handler ChatStreamHandler
+	post /api/chat/stream (ChatAskReq)
+}

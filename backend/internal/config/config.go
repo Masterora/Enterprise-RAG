@@ -58,6 +58,7 @@ type ProviderConf struct {
 	Provider string
 	Model    string
 	ApiKey   string `json:",optional"`
+	BaseURL  string `json:",optional"`
 }
 
 type EmbeddingConf struct {
@@ -65,4 +66,5 @@ type EmbeddingConf struct {
 	Model     string
 	Dimension int
 	ApiKey    string `json:",optional"`
+	BaseURL   string `json:",optional"`
 }

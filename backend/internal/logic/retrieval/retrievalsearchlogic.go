@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"enterprise-rag/backend/internal/auth"
+	retrievalsvc "enterprise-rag/backend/internal/service/retrieval"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -41,46 +42,9 @@ func (l *RetrievalSearchLogic) RetrievalSearch(req *types.RetrievalSearchReq) (r
 		return nil, err
 	}
 
-	exists, err := l.svcCtx.SubjectRepo.ExistsAccessible(l.ctx, subjectID, user.ID)
+	list, err := retrievalsvc.NewService(l.svcCtx).Search(l.ctx, user.ID, subjectID, query, req.TopK)
 	if err != nil {
 		return nil, err
-	}
-	if !exists {
-		return nil, errors.New("knowledge base not found")
-	}
-
-	vectors, err := l.svcCtx.Embedder.Embed(l.ctx, []string{query})
-	if err != nil {
-		return nil, err
-	}
-	if len(vectors) == 0 {
-		return nil, errors.New("query embedding is empty")
-	}
-
-	chunks, err := l.svcCtx.MilvusStore.Search(l.ctx, subjectID, vectors[0], req.TopK)
-	if err != nil {
-		return nil, err
-	}
-
-	list := make([]types.RetrievalChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		document, err := l.svcCtx.DocumentRepo.GetByID(l.ctx, chunk.DocID)
-		if err != nil {
-			return nil, err
-		}
-
-		list = append(list, types.RetrievalChunk{
-			ID:         chunk.ID,
-			DocID:      chunk.DocID,
-			DocName:    document.Filename,
-			SubjectID:  chunk.SubjectID,
-			UserID:     chunk.UserID,
-			ChunkIndex: chunk.ChunkIndex,
-			Page:       chunk.Page,
-			Section:    chunk.Section,
-			Content:    chunk.Content,
-			Score:      chunk.Score,
-		})
 	}
 
 	return &types.RetrievalSearchResp{List: list}, nil

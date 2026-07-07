@@ -9,4 +9,5 @@ import (
 type ChunkRepository interface {
 	ReplaceByDocument(ctx context.Context, chunks []model.DocumentChunk) error
 	ListByDocument(ctx context.Context, docID string) ([]model.DocumentChunk, error)
+	ListBySubject(ctx context.Context, subjectID string) ([]model.DocumentChunk, error)
 }

@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -25,7 +28,10 @@ func NewOpenAIClient(apiKey, model string) *OpenAIClient {
 
 func (c *OpenAIClient) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if c.apiKey == "" {
-		return nil, errors.New("OPENAI_API_KEY is required")
+		return nil, errors.New("embedding api key is required")
+	}
+	if strings.TrimSpace(c.model) == "" {
+		return nil, errors.New("embedding model is required")
 	}
 
 	body, err := json.Marshal(map[string]any{
@@ -49,8 +55,12 @@ func (c *OpenAIClient) Embed(ctx context.Context, texts []string) ([][]float32, 
 	}
 	defer resp.Body.Close()
 
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode >= 300 {
-		return nil, errors.New("openai embeddings request failed")
+		return nil, fmt.Errorf("openai embeddings request failed: status=%d body=%s", resp.StatusCode, string(responseBody))
 	}
 
 	var parsed struct {
@@ -58,12 +68,18 @@ func (c *OpenAIClient) Embed(ctx context.Context, texts []string) ([][]float32, 
 			Embedding []float32 `json:"embedding"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		return nil, err
+	}
+	if len(parsed.Data) != len(texts) {
+		return nil, fmt.Errorf("embedding response count mismatch: want=%d got=%d", len(texts), len(parsed.Data))
 	}
 
 	vectors := make([][]float32, 0, len(parsed.Data))
 	for _, item := range parsed.Data {
+		if len(item.Embedding) == 0 {
+			return nil, errors.New("embedding vector is empty")
+		}
 		vectors = append(vectors, item.Embedding)
 	}
 	return vectors, nil

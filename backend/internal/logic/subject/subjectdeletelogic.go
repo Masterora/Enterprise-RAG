@@ -40,10 +40,16 @@ func (l *SubjectDeleteLogic) SubjectDelete(req *types.SubjectDeleteReq) (resp *t
 		return nil, err
 	}
 
+	if err := l.svcCtx.MilvusStore.DeleteBySubject(l.ctx, user.ID, id); err != nil {
+		logx.WithContext(l.ctx).Errorf("subject delete milvus delete failed: user_id=%s subject_id=%s err=%v", user.ID, id, err)
+		return nil, err
+	}
+
 	deleted, err := l.svcCtx.SubjectRepo.SoftDeleteByOwner(l.ctx, id, user.ID)
 	if err != nil {
 		return nil, err
 	}
+	logx.WithContext(l.ctx).Infof("subject delete finished: user_id=%s subject_id=%s deleted=%t", user.ID, id, deleted)
 
 	return &types.SubjectDeleteResp{Deleted: deleted}, nil
 }

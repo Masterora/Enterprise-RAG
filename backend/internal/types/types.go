@@ -8,6 +8,14 @@ type AuthLoginReq struct {
 	Password string `json:"password"`
 }
 
+type AuthRegisterReq struct {
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+	Nickname        string `json:"nickname,optional"`
+	Email           string `json:"email,optional"`
+}
+
 type AuthLoginResp struct {
 	Token string   `json:"token"`
 	User  UserInfo `json:"user"`
@@ -38,6 +46,10 @@ type DocumentListResp struct {
 	Total int64          `json:"total"`
 }
 
+type DocumentClearFailedResp struct {
+	Deleted int64 `json:"deleted"`
+}
+
 type DocumentUploadResp struct {
 	Document DocumentInfo `json:"document"`
 }
@@ -53,6 +65,8 @@ type RetrievalChunk struct {
 	Section    string  `json:"section"`
 	Content    string  `json:"content"`
 	Score      float64 `json:"score"`
+	RawScore   float64 `json:"raw_score"`
+	Source     string  `json:"source"`
 }
 
 type RetrievalSearchReq struct {
@@ -63,6 +77,17 @@ type RetrievalSearchReq struct {
 
 type RetrievalSearchResp struct {
 	List []RetrievalChunk `json:"list"`
+}
+
+type ChatAskReq struct {
+	SubjectID string `json:"subject_id"`
+	Query     string `json:"query"`
+	TopK      int    `json:"top_k,optional"`
+}
+
+type ChatAskResp struct {
+	Answer string           `json:"answer"`
+	Chunks []RetrievalChunk `json:"chunks"`
 }
 
 type SubjectCreateReq struct {
@@ -125,9 +150,30 @@ type SubjectUpdateResp struct {
 type UserInfo struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
+	Nickname string `json:"nickname"`
 	Email    string `json:"email"`
+	Language string `json:"language"`
+}
+
+type UserPasswordUpdateReq struct {
+	OldPassword     string `json:"old_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+type UserPasswordUpdateResp struct {
 }
 
 type UserMeResp struct {
+	User UserInfo `json:"user"`
+}
+
+type UserUpdateReq struct {
+	Nickname string `json:"nickname,optional"`
+	Email    string `json:"email,optional"`
+	Language string `json:"language"`
+}
+
+type UserUpdateResp struct {
 	User UserInfo `json:"user"`
 }

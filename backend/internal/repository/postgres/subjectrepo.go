@@ -162,7 +162,12 @@ func (r *SubjectRepo) UpdateByOwner(ctx context.Context, subject *model.Subject)
 }
 
 func (r *SubjectRepo) SoftDeleteByOwner(ctx context.Context, subjectID, userID string) (bool, error) {
-	tag, err := r.db.Exec(
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	tag, err := tx.Exec(
 		ctx,
 		`UPDATE subjects
 		 SET deleted_at = now(), updated_at = now()
@@ -171,7 +176,40 @@ func (r *SubjectRepo) SoftDeleteByOwner(ctx context.Context, subjectID, userID s
 		userID,
 	)
 	if err != nil {
+		_ = tx.Rollback(ctx)
 		return false, err
 	}
-	return tag.RowsAffected() > 0, nil
+	if tag.RowsAffected() == 0 {
+		_ = tx.Rollback(ctx)
+		return false, nil
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`UPDATE documents
+		 SET deleted_at = now(), updated_at = now()
+		 WHERE subject_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+		subjectID,
+		userID,
+	); err != nil {
+		_ = tx.Rollback(ctx)
+		return false, err
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`UPDATE document_chunks
+		 SET deleted_at = now(), updated_at = now()
+		 WHERE subject_id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+		subjectID,
+		userID,
+	); err != nil {
+		_ = tx.Rollback(ctx)
+		return false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
 }

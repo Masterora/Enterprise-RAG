@@ -31,3 +31,8 @@ export async function listDocuments(payload: {
   const response = await apiClient.post<{ list: DocumentInfo[]; total: number }>('/documents/list', payload)
   return response.data
 }
+
+export async function clearFailedDocuments() {
+  const response = await apiClient.post<{ deleted: number }>('/documents/clear-failed')
+  return response.data.deleted
+}

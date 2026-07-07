@@ -11,6 +11,8 @@ export interface RetrievalChunk {
   section: string
   content: string
   score: number
+  raw_score: number
+  source: string
 }
 
 export async function searchRetrieval(payload: {

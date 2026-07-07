@@ -7,18 +7,15 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
-	"enterprise-rag/backend/internal/auth"
-	"enterprise-rag/backend/internal/model"
 	pgrepo "enterprise-rag/backend/internal/repository/postgres"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
+	"enterprise-rag/backend/internal/auth"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthLoginLogic struct {
@@ -44,24 +41,12 @@ func (l *AuthLoginLogic) AuthLogin(req *types.AuthLoginReq) (resp *types.AuthLog
 
 	user, err := l.svcCtx.UserRepo.FindByUsername(l.ctx, username)
 	if errors.Is(err, pgrepo.ErrUserNotFound) {
-		hashed, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if hashErr != nil {
-			return nil, hashErr
-		}
-		now := time.Now()
-		user = &model.User{
-			ID:           uuid.NewString(),
-			Username:     username,
-			PasswordHash: string(hashed),
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
-		if createErr := l.svcCtx.UserRepo.Create(l.ctx, user); createErr != nil {
-			return nil, createErr
-		}
-	} else if err != nil {
+		return nil, errors.New("username or password is invalid")
+	}
+	if err != nil {
 		return nil, err
-	} else if compareErr := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); compareErr != nil {
+	}
+	if compareErr := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); compareErr != nil {
 		return nil, errors.New("username or password is invalid")
 	}
 
@@ -79,7 +64,9 @@ func (l *AuthLoginLogic) AuthLogin(req *types.AuthLoginReq) (resp *types.AuthLog
 		User: types.UserInfo{
 			ID:       user.ID,
 			Username: user.Username,
+			Nickname: user.Nickname,
 			Email:    user.Email,
+			Language: user.Language,
 		},
 	}, nil
 }

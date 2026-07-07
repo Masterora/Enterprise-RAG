@@ -25,11 +25,11 @@ func (r *UserRepo) FindByUsername(ctx context.Context, username string) (*model.
 	var email sql.NullString
 	err := r.db.QueryRow(
 		ctx,
-		`SELECT id::text, username, email, password_hash, created_at, updated_at
+		`SELECT id::text, username, nickname, email, language, password_hash, created_at, updated_at
 		 FROM users
 		 WHERE username = $1 AND deleted_at IS NULL`,
 		username,
-	).Scan(&user.ID, &user.Username, &email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Nickname, &email, &user.Language, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -42,11 +42,11 @@ func (r *UserRepo) GetByID(ctx context.Context, userID string) (*model.User, err
 	var email sql.NullString
 	err := r.db.QueryRow(
 		ctx,
-		`SELECT id::text, username, email, password_hash, created_at, updated_at
+		`SELECT id::text, username, nickname, email, language, password_hash, created_at, updated_at
 		 FROM users
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		userID,
-	).Scan(&user.ID, &user.Username, &email, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Nickname, &email, &user.Language, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -57,13 +57,52 @@ func (r *UserRepo) GetByID(ctx context.Context, userID string) (*model.User, err
 func (r *UserRepo) Create(ctx context.Context, user *model.User) error {
 	_, err := r.db.Exec(
 		ctx,
-		`INSERT INTO users (id, username, email, password_hash, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $5)`,
+		`INSERT INTO users (id, username, nickname, email, language, password_hash, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
 		user.ID,
 		user.Username,
+		user.Nickname,
 		sql.NullString{String: user.Email, Valid: user.Email != ""},
+		user.Language,
 		user.PasswordHash,
 		user.CreatedAt,
+	)
+	return err
+}
+
+func (r *UserRepo) UpdateProfile(ctx context.Context, userID, nickname, email, language string) (*model.User, error) {
+	var user model.User
+	var storedEmail sql.NullString
+	err := r.db.QueryRow(
+		ctx,
+		`UPDATE users
+		 SET nickname = $2,
+		     email = $3,
+		     language = $4,
+		     updated_at = now()
+		 WHERE id = $1 AND deleted_at IS NULL
+		 RETURNING id::text, username, nickname, email, language, password_hash, created_at, updated_at`,
+		userID,
+		nickname,
+		sql.NullString{String: email, Valid: email != ""},
+		language,
+	).Scan(&user.ID, &user.Username, &user.Nickname, &storedEmail, &user.Language, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	user.Email = storedEmail.String
+	return &user, nil
+}
+
+func (r *UserRepo) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
+	_, err := r.db.Exec(
+		ctx,
+		`UPDATE users
+		 SET password_hash = $2,
+		     updated_at = now()
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		userID,
+		passwordHash,
 	)
 	return err
 }
