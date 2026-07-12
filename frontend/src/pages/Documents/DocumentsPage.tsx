@@ -40,6 +40,10 @@ import {
 } from '../../api/documents'
 import { listSubjects, type SubjectInfo } from '../../api/subjects'
 import { useI18n } from '../../useI18n'
+import {
+	translateErrorMessage as translateDocumentErrorMessage,
+	translateTaskMessage,
+} from '../../utils/errorMessage'
 
 const uploadConcurrency = 4
 
@@ -105,53 +109,6 @@ function buildUploadPlan(files: File[], existingNames: string[]) {
   }
 
   return { files: renamedFiles, renamePlans }
-}
-
-function translateDocumentErrorMessage(errorMessage: string, t: (key: string) => string) {
-  const message = errorMessage.trim()
-  const normalized = message.toLowerCase()
-
-  if (!message) {
-    return ''
-  }
-  if (normalized.includes('incorrect api key provided') || normalized.includes('invalid api-key provided') || normalized.includes('invalid_api_key')) {
-    return t('logs.error.invalidApiKey')
-  }
-  if (normalized.includes('request timeout') || normalized.includes('context deadline exceeded') || normalized.includes('deadline exceeded') || normalized.includes('timeout')) {
-    return t('logs.error.timeout')
-  }
-  if (normalized.includes('no rows in result set')) {
-    return t('logs.error.noRows')
-  }
-  if (normalized.includes('openai responses request failed')) {
-    return t('logs.error.openaiResponses')
-  }
-  if (normalized.includes('openai embeddings request failed')) {
-    return t('logs.error.openaiEmbeddings')
-  }
-  if (normalized.includes('llm compatible chat request failed')) {
-    return t('logs.error.compatibleChat')
-  }
-  if (normalized.includes('llm compatible stream request failed')) {
-    return t('logs.error.compatibleStream')
-  }
-  if (normalized.includes('embedding compatible request failed')) {
-    return t('logs.error.compatibleEmbedding')
-  }
-  if (normalized.includes('query rewrite failed')) {
-    return t('logs.error.queryRewrite')
-  }
-  if (normalized.includes('pdf') && (normalized.includes('加密') || normalized.includes('encryption version') || normalized.includes('filter /standard'))) {
-    return t('logs.error.encryptedPdf')
-  }
-  if (normalized.includes('未启用 ocr') || normalized.includes('ocr is not enabled') || normalized.includes('image-heavy')) {
-    return t('logs.error.ocrRequired')
-  }
-  if (normalized.includes('unsupported document type') || message.includes('暂不支持该文件格式')) {
-    return t('logs.error.unsupportedDocumentType')
-  }
-
-  return message
 }
 
 function documentStageLabel(status: string, t: (key: string) => string) {
@@ -248,55 +205,55 @@ export function DocumentsPage() {
       return
     }
 
-    const existing = await listDocuments({
-      subject_id: values.subject_id,
-      page: 1,
-      page_size: 1000,
-    })
-    const { files, renamePlans } = buildUploadPlan(
-      originalFiles,
-      existing.list.map((item) => item.filename),
-    )
-
-    if (renamePlans.length > 0) {
-      const confirmed = await new Promise<boolean>((resolve) => {
-        Modal.confirm({
-          title: t('documents.duplicateTitle'),
-          width: 640,
-          content: (
-            <div>
-              <Typography.Paragraph>{t('documents.duplicateDescription')}</Typography.Paragraph>
-              <List
-                size="small"
-                dataSource={renamePlans}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text delete>{item.originalName}</Typography.Text>
-                      <Typography.Text strong>{item.nextName}</Typography.Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </div>
-          ),
-          okText: t('documents.duplicateContinue'),
-          cancelText: t('common.cancel'),
-          onOk: () => resolve(true),
-          onCancel: () => resolve(false),
-        })
-      })
-      if (!confirmed) {
-        return
-      }
-    }
-
     setUploading(true)
+    setUploadModalOpen(false)
+    setUploadFilePage(1)
+    form.resetFields()
     try {
+      const existing = await listDocuments({
+        subject_id: values.subject_id,
+        page: 1,
+        page_size: 1000,
+      })
+      const { files, renamePlans } = buildUploadPlan(
+        originalFiles,
+        existing.list.map((item) => item.filename),
+      )
+
+      if (renamePlans.length > 0) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: t('documents.duplicateTitle'),
+            width: 640,
+            content: (
+              <div>
+                <Typography.Paragraph>{t('documents.duplicateDescription')}</Typography.Paragraph>
+                <List
+                  size="small"
+                  dataSource={renamePlans}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Space direction="vertical" size={0}>
+                        <Typography.Text delete>{item.originalName}</Typography.Text>
+                        <Typography.Text strong>{item.nextName}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ),
+            okText: t('documents.duplicateContinue'),
+            cancelText: t('common.cancel'),
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!confirmed) {
+          return
+        }
+      }
+
       await uploadFiles(values.subject_id, files)
-      form.resetFields()
-      setUploadModalOpen(false)
-      setUploadFilePage(1)
       message.success(
         files.length === 1
           ? t('documents.uploadSuccess')
@@ -489,7 +446,12 @@ export function DocumentsPage() {
       <Card className="page-card" title={t('documents.uploadTitle')}>
         <div className="upload-entry">
           <Space size={12} wrap>
-            <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadModalOpen(true)}>
+            <Button
+              type="primary"
+              icon={<UploadOutlined />}
+              loading={uploading}
+              onClick={() => setUploadModalOpen(true)}
+            >
               {t('documents.chooseFile')}
             </Button>
             {selectedFiles && selectedFiles.length > 0 ? (
@@ -830,8 +792,16 @@ export function DocumentsPage() {
                         dataIndex: 'status',
                         render: (value) => t(`tasks.status.${value}`),
                       },
-                      { title: t('documents.logMessage'), dataIndex: 'message' },
-                      { title: t('documents.errorMessage'), dataIndex: 'error_message' },
+						{
+							title: t('documents.logMessage'),
+							dataIndex: 'message',
+							render: (value: string) => translateTaskMessage(value, t),
+						},
+						{
+							title: t('documents.errorMessage'),
+							dataIndex: 'error_message',
+							render: (value: string) => value ? translateDocumentErrorMessage(value, t) : '-',
+						},
                       {
                         title: t('documents.createdAt'),
                         dataIndex: 'created_at',

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type DocumentChunk struct {
 	ID         string
@@ -11,15 +14,26 @@ type DocumentChunk struct {
 	Content    string
 	Page       int
 	Section    string
+	Metadata   json.RawMessage
 	TokenCount int
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
 
 type ParseSegment struct {
-	Page    int    `json:"page"`
-	Section string `json:"section"`
-	Content string `json:"content"`
+	Page        int      `json:"page"`
+	Section     string   `json:"section"`
+	HeadingPath []string `json:"heading_path,omitempty"`
+	BlockType   string   `json:"block_type,omitempty"`
+	Content     string   `json:"content"`
+}
+
+type ChunkMetadata struct {
+	HeadingPath []string `json:"heading_path,omitempty"`
+	BlockType   string   `json:"block_type,omitempty"`
+	Keywords    []string `json:"keywords,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	SourceType  string   `json:"source_type,omitempty"`
 }
 
 type DocumentMetadata struct {

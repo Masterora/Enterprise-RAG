@@ -31,29 +31,36 @@ func TestBuildPromptIncludesGroundingRules(t *testing.T) {
 	}
 }
 
-func TestRouteQuery(t *testing.T) {
+func TestParseRouteResponse(t *testing.T) {
 	tests := []struct {
-		query string
-		want  QueryRoute
+		response string
+		want     QueryAnalysis
+		ok       bool
 	}{
-		{query: "这个知识库有什么内容", want: QueryRouteOverview},
-		{query: "这个库能解决什么问题", want: QueryRouteOverview},
-		{query: "有哪些文档讲了 Milvus", want: QueryRouteNavigation},
-		{query: "这个知识库里哪些文档讲 MQTT", want: QueryRouteNavigation},
-		{query: "删除文档时为什么要先删除 Milvus 里的向量", want: QueryRouteRAG},
-		{query: "Jaeger 主要用来看什么", want: QueryRouteRAG},
+		{response: `{"route":"overview","search_query":""}`, want: QueryAnalysis{Route: QueryRouteOverview}, ok: true},
+		{response: "```json\n{\"route\":\"navigation\",\"search_query\":\"\"}\n```", want: QueryAnalysis{Route: QueryRouteNavigation}, ok: true},
+		{response: `{"route":"unknown"}`, ok: false},
+		{response: "overview", ok: false},
 	}
 
 	for _, tt := range tests {
-		if got := RouteQuery(tt.query); got != tt.want {
-			t.Fatalf("RouteQuery(%q) = %q, want %q", tt.query, got, tt.want)
+		got, ok := parseRouteResponse(tt.response)
+		if got != tt.want || ok != tt.ok {
+			t.Fatalf("parseRouteResponse(%q) = (%q, %v), want (%q, %v)", tt.response, got, ok, tt.want, tt.ok)
 		}
 	}
 }
 
+func TestBuildRoutePromptUsesCustomTemplate(t *testing.T) {
+	prompt := BuildRoutePrompt(config.PromptConf{RouteTemplate: "判断={{question}}"}, "能干什么")
+	if prompt != "判断=能干什么" {
+		t.Fatalf("unexpected route prompt: %q", prompt)
+	}
+}
+
 func TestExtractNavigationTopic(t *testing.T) {
-	if got := extractNavigationTopic("有哪些文档讲了 Milvus"); got != "Milvus" {
-		t.Fatalf("extractNavigationTopic() = %q, want %q", got, "Milvus")
+	if got := extractNavigationTopic("向量数据库选型"); got != "向量数据库选型" {
+		t.Fatalf("extractNavigationTopic() = %q, want %q", got, "向量数据库选型")
 	}
 }
 
@@ -94,17 +101,10 @@ func TestFormatOverviewAnswerHighlightsListTitle(t *testing.T) {
 }
 
 func TestBuildOverviewLeadIncludesReferenceSuffix(t *testing.T) {
-	got := buildOverviewLead("这个知识库有什么内容", "ut", 4, []string{"MQTT 通信协议", "E语言规范"}, []types.RetrievalChunk{{}, {}, {}})
+	got := buildOverviewLead("ut", 4, []string{"MQTT 通信协议", "E语言规范"}, []types.RetrievalChunk{{}, {}, {}})
 	want := "知识库“ut”当前共包含 4 篇已索引文档，主要覆盖 MQTT 通信协议、E语言规范 等方向。 [引用1] [引用2] [引用3]"
 	if got != want {
 		t.Fatalf("buildOverviewLead() = %q, want %q", got, want)
-	}
-}
-
-func TestBuildOverviewLeadSupportsUseCaseQuestion(t *testing.T) {
-	got := buildOverviewLead("这个库能解决什么问题", "ut", 4, []string{"MQTT 通信协议", "E语言规范"}, []types.RetrievalChunk{{}})
-	if !strings.Contains(got, "主要可用于支撑 MQTT 通信协议、E语言规范 相关的协议理解、方案实现、联调排障与规范查阅。") {
-		t.Fatalf("unexpected use-case lead: %q", got)
 	}
 }
 
@@ -121,5 +121,22 @@ func TestBuildPromptUsesCustomTemplate(t *testing.T) {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("custom prompt missing %q\n%s", expected, prompt)
 		}
+	}
+}
+
+func TestBuildPromptUsesExplanationTemplate(t *testing.T) {
+	prompt := BuildPrompt(config.PromptConf{ExplanationTemplate: "解释={{question}}"}, "为什么先删除向量？", nil, nil, false)
+	if prompt != "解释=为什么先删除向量？" {
+		t.Fatalf("unexpected prompt: %q", prompt)
+	}
+}
+
+func TestReferencedSourcesKeepsOnlyUsedCitations(t *testing.T) {
+	chunks, links := ReferencedSources("结论。[引用2][外链1]", []types.RetrievalChunk{{ID: "1"}, {ID: "2"}}, []types.ExternalLink{{URL: "https://example.com"}, {URL: "https://unused.example.com"}})
+	if len(chunks) != 1 || chunks[0].ID != "2" {
+		t.Fatalf("unexpected chunks: %#v", chunks)
+	}
+	if len(links) != 1 || links[0].URL != "https://example.com" {
+		t.Fatalf("unexpected links: %#v", links)
 	}
 }

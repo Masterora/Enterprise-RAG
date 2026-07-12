@@ -1,6 +1,7 @@
 package retrieval
 
 import (
+	"strings"
 	"testing"
 
 	"enterprise-rag/backend/internal/types"
@@ -55,6 +56,28 @@ func TestSanitizeRewrittenQuery(t *testing.T) {
 	}
 }
 
+func TestBuildQueryPlanSplitsMixedQuestion(t *testing.T) {
+	plan := buildQueryPlan(
+		"Jaeger 主要看什么？同时，为什么删除文档前要先删除 Milvus 向量？",
+		"Jaeger 用途与 Milvus 文档删除顺序",
+		500,
+		4,
+	)
+	if len(plan.queries) != 3 {
+		t.Fatalf("query count = %d, want 3: %#v", len(plan.queries), plan.queries)
+	}
+	if plan.queries[0] != "Jaeger 用途与 Milvus 文档删除顺序" {
+		t.Fatalf("first query = %q", plan.queries[0])
+	}
+}
+
+func TestCompactQueryUsesConfiguredLimit(t *testing.T) {
+	got := compactQuery(strings.Repeat("测试", 100), 40)
+	if len([]rune(got)) > 40 {
+		t.Fatalf("query length = %d, want <= 40", len([]rune(got)))
+	}
+}
+
 func TestRerankChunks(t *testing.T) {
 	chunks := []types.RetrievalChunk{
 		{ID: "chunk-1", ChunkIndex: 1, Content: "完全无关内容", Score: 0.9, Source: "vector"},
@@ -92,7 +115,7 @@ func TestTrimEffectiveChunks(t *testing.T) {
 		limit  int
 		wantID []string
 	}{
-	{
+		{
 			name: "removes weak and duplicate sources",
 			chunks: []types.RetrievalChunk{
 				{ID: "strong", DocID: "doc-1", Section: "删除流程", Content: "先删除向量", Score: 0.8},
@@ -115,7 +138,12 @@ func TestTrimEffectiveChunks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filtered := trimEffectiveChunks(tt.chunks, tt.limit)
+			filtered := trimEffectiveChunks(tt.chunks, citationPolicy{
+				limit:                tt.limit,
+				absoluteThreshold:    0.5,
+				relativeThreshold:    0.72,
+				maxChunksPerDocument: 3,
+			})
 			if len(filtered) != len(tt.wantID) {
 				t.Fatalf("filtered count = %d, want %d", len(filtered), len(tt.wantID))
 			}

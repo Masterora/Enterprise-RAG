@@ -10,6 +10,7 @@ import (
 
 	"enterprise-rag/backend/internal/infrastructure/parser"
 	"enterprise-rag/backend/internal/model"
+	"enterprise-rag/backend/internal/service/documentchunk"
 	"enterprise-rag/backend/internal/service/taskqueue"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/task"
@@ -270,7 +271,7 @@ func (m *Manager) chunkDocument(ctx context.Context, message *task.Message) erro
 		return err
 	}
 
-	chunks, err := buildChunks(doc)
+	chunks, err := documentchunk.Build(doc, m.svcCtx.Config.Chunking)
 	if err != nil {
 		return err
 	}
@@ -369,10 +370,21 @@ func (m *Manager) deleteDocument(ctx context.Context, message *task.Message) err
 func buildEmbeddingText(chunk model.DocumentChunk) string {
 	content := strings.TrimSpace(chunk.Content)
 	section := strings.TrimSpace(chunk.Section)
-	if section == "" || section == "text" {
-		return content
+	parts := make([]string, 0, 3)
+	if section != "" && section != "text" {
+		parts = append(parts, section)
 	}
-	return section + "\n" + content
+	var metadata model.ChunkMetadata
+	if len(chunk.Metadata) > 0 && json.Unmarshal(chunk.Metadata, &metadata) == nil {
+		if len(metadata.Keywords) > 0 {
+			parts = append(parts, strings.Join(metadata.Keywords, " "))
+		}
+		if metadata.Summary != "" && metadata.Summary != content {
+			parts = append(parts, metadata.Summary)
+		}
+	}
+	parts = append(parts, content)
+	return strings.Join(parts, "\n")
 }
 
 func parseFileURL(fileURL string) (string, string, error) {
@@ -387,62 +399,4 @@ func parseFileURL(fileURL string) (string, string, error) {
 		return "", "", errors.New("invalid minio file url")
 	}
 	return parts[0], parts[1], nil
-}
-
-func buildChunks(doc *model.Document) ([]model.DocumentChunk, error) {
-	var metadata model.DocumentMetadata
-	if len(doc.Metadata) > 0 {
-		if err := json.Unmarshal(doc.Metadata, &metadata); err != nil {
-			return nil, err
-		}
-	}
-
-	if len(metadata.Segments) == 0 {
-		metadata.Segments = []model.ParseSegment{{Content: doc.PlainText}}
-	}
-
-	const chunkSize = 800
-	const overlap = 120
-
-	chunks := make([]model.DocumentChunk, 0)
-	index := 0
-	now := time.Now()
-	for _, segment := range metadata.Segments {
-		text := []rune(strings.TrimSpace(segment.Content))
-		for start := 0; start < len(text); {
-			end := start + chunkSize
-			if end > len(text) {
-				end = len(text)
-			}
-			content := strings.TrimSpace(string(text[start:end]))
-			if content != "" {
-				chunks = append(chunks, model.DocumentChunk{
-					ID:         uuid.NewString(),
-					DocID:      doc.ID,
-					SubjectID:  doc.SubjectID,
-					UserID:     doc.UserID,
-					ChunkIndex: index,
-					Content:    content,
-					Page:       segment.Page,
-					Section:    segment.Section,
-					TokenCount: len([]rune(content)),
-					CreatedAt:  now,
-					UpdatedAt:  now,
-				})
-				index++
-			}
-			if end == len(text) {
-				break
-			}
-			start = end - overlap
-			if start < 0 {
-				start = 0
-			}
-		}
-	}
-
-	if len(chunks) == 0 {
-		return nil, fmt.Errorf("document %s has no chunkable content", doc.ID)
-	}
-	return chunks, nil
 }

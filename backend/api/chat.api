@@ -11,6 +11,8 @@ type ChatAskReq {
 	WebSearch        bool     `json:"web_search,optional"`
 	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
 	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+	ExpectedRoute    string   `json:"expected_route,optional"`
+	ExpectedOutcome  string   `json:"expected_outcome,optional"`
 }
 
 type ChatAskResp {

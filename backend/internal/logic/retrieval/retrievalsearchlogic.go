@@ -46,6 +46,7 @@ func (l *RetrievalSearchLogic) RetrievalSearch(req *types.RetrievalSearchReq) (r
 		TopK:             req.TopK,
 		ExpectedDocIDs:   req.ExpectedDocIDs,
 		ExpectedChunkIDs: req.ExpectedChunkIDs,
+		ExpectedRoute:    req.ExpectedRoute,
 	})
 	if err != nil {
 		return nil, err

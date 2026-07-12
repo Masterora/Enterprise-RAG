@@ -6,6 +6,7 @@ type RetrievalSearchReq {
 	TopK             int      `json:"top_k,optional"`
 	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
 	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+	ExpectedRoute    string   `json:"expected_route,optional"`
 }
 
 type RetrievalSearchResp {
@@ -13,11 +14,38 @@ type RetrievalSearchResp {
 	Metrics RetrievalMetrics `json:"metrics"`
 }
 
+type RetrievalEvaluateReq {
+	SubjectID string `json:"subject_id"`
+}
+
+type RetrievalEvaluationCaseResult {
+	Name             string           `json:"name"`
+	Query            string           `json:"query"`
+	ExpectedRoute    string           `json:"expected_route"`
+	MissingDocuments []string         `json:"missing_documents"`
+	Metrics          RetrievalMetrics `json:"metrics"`
+	Passed           bool             `json:"passed"`
+	ErrorMessage     string           `json:"error_message"`
+}
+
+type RetrievalEvaluateResp {
+	Total            int                             `json:"total"`
+	Passed           int                             `json:"passed"`
+	PassRate         float64                         `json:"pass_rate"`
+	AverageRecallAtK float64                         `json:"average_recall_at_k"`
+	RouteAccuracy    float64                         `json:"route_accuracy"`
+	AverageLatencyMS int64                           `json:"average_latency_ms"`
+	Cases            []RetrievalEvaluationCaseResult `json:"cases"`
+}
+
 @server (
 	group:      retrieval
 	middleware: AuthMiddleware
 )
 service rag-api {
+	@handler RetrievalEvaluateHandler
+	post /api/retrieval/evaluate (RetrievalEvaluateReq) returns (RetrievalEvaluateResp)
+
 	@handler RetrievalSearchHandler
 	post /api/retrieval/search (RetrievalSearchReq) returns (RetrievalSearchResp)
 }

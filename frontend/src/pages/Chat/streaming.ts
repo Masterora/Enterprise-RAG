@@ -47,6 +47,7 @@ type RetryInput = {
   labels: RetryLabels
   callbacks: RetryCallbacks
   classifyChatFailure: (error: unknown) => ChatFailure
+  localizeStatus: (status: string) => string
 }
 
 export async function askWithRetry(input: RetryInput) {
@@ -55,6 +56,7 @@ export async function askWithRetry(input: RetryInput) {
   for (let attempt = 1; attempt <= input.maxAskAttempts; attempt += 1) {
     const controller = new AbortController()
     let completed = false
+    let receivedDelta = false
     let timeout = window.setTimeout(() => controller.abort(), input.askTimeoutMS)
     const resetTimeout = () => {
       window.clearTimeout(timeout)
@@ -97,8 +99,9 @@ export async function askWithRetry(input: RetryInput) {
         {
           onEvent: resetTimeout,
           onStatus: (status) => {
-            input.callbacks.updateMessage(input.sessionID, input.messageID, { status })
-            input.callbacks.appendProcessStep(input.sessionID, input.messageID, status)
+			const localizedStatus = input.localizeStatus(status)
+			input.callbacks.updateMessage(input.sessionID, input.messageID, { status: localizedStatus })
+			input.callbacks.appendProcessStep(input.sessionID, input.messageID, localizedStatus)
           },
           onSources: (chunks) => {
             input.callbacks.updateMessage(input.sessionID, input.messageID, { chunks })
@@ -129,6 +132,7 @@ export async function askWithRetry(input: RetryInput) {
             )
           },
           onDelta: (content) => {
+            receivedDelta = true
             input.callbacks.appendProcessStep(input.sessionID, input.messageID, input.labels.answerStreaming)
             input.callbacks.appendAnswer(input.sessionID, input.messageID, content)
           },
@@ -164,7 +168,7 @@ export async function askWithRetry(input: RetryInput) {
       }
       lastError = error
       const failure = input.classifyChatFailure(error)
-      if (attempt < input.maxAskAttempts && failure.retryable) {
+      if (!receivedDelta && attempt < input.maxAskAttempts && failure.retryable) {
         input.callbacks.updateMessage(input.sessionID, input.messageID, {
           status: input.labels.retryNotice(attempt + 1),
         })
@@ -174,6 +178,37 @@ export async function askWithRetry(input: RetryInput) {
   }
 
   throw lastError
+}
+
+const chatStatusKeys: Record<string, string> = {
+  'chat.route.overview': 'chat.status.routeOverview',
+  'chat.route.navigation': 'chat.status.routeNavigation',
+  'chat.route.fallback': 'chat.status.routeFallback',
+  'chat.retrieval.start': 'chat.status.retrievalStart',
+  'chat.answer.insufficient': 'chat.status.answerInsufficient',
+  'chat.answer.generating': 'chat.status.answerGenerating',
+  'chat.web.prepare': 'chat.status.webPrepare',
+  'chat.web.searching': 'chat.status.webSearching',
+  'chat.web.ready': 'chat.status.webReady',
+  'chat.web.empty': 'chat.status.webEmpty',
+  'retrieval.rewrite.start': 'chat.status.rewriteStart',
+  'retrieval.rewrite.fallback': 'chat.status.rewriteFallback',
+  'retrieval.rewrite.done': 'chat.status.rewriteDone',
+  'retrieval.rewrite.skipped': 'chat.status.rewriteSkipped',
+  'retrieval.rewrite.disabled': 'chat.status.rewriteDisabled',
+  'retrieval.query.split': 'chat.status.querySplit',
+  'retrieval.embedding.start': 'chat.status.embeddingStart',
+  'retrieval.vector.start': 'chat.status.vectorStart',
+  'retrieval.keyword.start': 'chat.status.keywordStart',
+  'retrieval.merge.start': 'chat.status.mergeStart',
+  'retrieval.rerank.start': 'chat.status.rerankStart',
+  'retrieval.rerank.skipped': 'chat.status.rerankSkipped',
+  'retrieval.citations.trim': 'chat.status.citationsTrim',
+}
+
+export function localizeChatStatus(status: string, t: (key: string) => string) {
+  const key = chatStatusKeys[status]
+  return key ? t(key) : t('chat.status.processing')
 }
 
 export function classifyChatFailure(error: unknown, t: (key: string) => string): ChatFailure {

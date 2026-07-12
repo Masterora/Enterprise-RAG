@@ -129,12 +129,12 @@ export async function streamChat(
 function extractStreamErrorMessage(status: number, rawBody: string) {
   const body = rawBody.trim()
   if (!body) {
-    return `问答请求失败（${status}）`
+    return `chat_request_failed:${status}`
   }
 
   try {
     const parsed = JSON.parse(body) as { message?: string; error?: { message?: string } }
-    return parsed.message || parsed.error?.message || `问答请求失败（${status}）`
+    return parsed.message || parsed.error?.message || `chat_request_failed:${status}`
   } catch {
     return body
   }
@@ -199,8 +199,8 @@ function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
     return true
   }
   if (event === 'error') {
-    handlers.onError?.(parsed.message ?? '问答生成失败')
-    throw new Error(parsed.message ?? '问答生成失败')
+    handlers.onError?.(parsed.message ?? 'chat_generation_failed')
+    throw new Error(parsed.message ?? 'chat_generation_failed')
   }
   return false
 }

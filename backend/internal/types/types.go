@@ -3,6 +3,14 @@
 
 package types
 
+type AdminLogClearReq struct {
+	SubjectID string `json:"subject_id,optional"`
+}
+
+type AdminLogClearResp struct {
+	Cleared int64 `json:"cleared"`
+}
+
 type AdminLogListReq struct {
 	SubjectID string `json:"subject_id,optional"`
 	Status    string `json:"status,optional"`
@@ -13,14 +21,6 @@ type AdminLogListReq struct {
 type AdminLogListResp struct {
 	List  []ParseLogInfo `json:"list"`
 	Total int64          `json:"total"`
-}
-
-type AdminLogClearReq struct {
-	SubjectID string `json:"subject_id,optional"`
-}
-
-type AdminLogClearResp struct {
-	Cleared int64 `json:"cleared"`
 }
 
 type AdminSummaryResp struct {
@@ -82,6 +82,8 @@ type ChatAskReq struct {
 	WebSearch        bool     `json:"web_search,optional"`
 	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
 	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+	ExpectedRoute    string   `json:"expected_route,optional"`
+	ExpectedOutcome  string   `json:"expected_outcome,optional"`
 }
 
 type ChatAskResp struct {
@@ -194,12 +196,6 @@ type DocumentInfo struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
-type ExternalLink struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Snippet string `json:"snippet"`
-}
-
 type DocumentListReq struct {
 	SubjectID string `json:"subject_id,optional"`
 	Status    string `json:"status,optional"`
@@ -215,6 +211,12 @@ type DocumentListResp struct {
 
 type DocumentUploadResp struct {
 	Document DocumentInfo `json:"document"`
+}
+
+type ExternalLink struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
 }
 
 type IndexTaskInfo struct {
@@ -264,16 +266,24 @@ type RetrievalChunk struct {
 }
 
 type RetrievalMetrics struct {
-	OriginalQuery  string  `json:"original_query"`
-	SearchQuery    string  `json:"search_query"`
-	QueryRewritten bool    `json:"query_rewritten"`
-	Reranked       bool    `json:"reranked"`
-	TopK           int     `json:"top_k"`
-	CandidateCount int     `json:"candidate_count"`
-	ReturnedCount  int     `json:"returned_count"`
-	ExpectedCount  int     `json:"expected_count"`
-	RecallHitCount int     `json:"recall_hit_count"`
-	RecallAtK      float64 `json:"recall_at_k"`
+	OriginalQuery    string  `json:"original_query"`
+	SearchQuery      string  `json:"search_query"`
+	QueryRewritten   bool    `json:"query_rewritten"`
+	Reranked         bool    `json:"reranked"`
+	TopK             int     `json:"top_k"`
+	CandidateCount   int     `json:"candidate_count"`
+	ReturnedCount    int     `json:"returned_count"`
+	SubQueryCount    int     `json:"sub_query_count"`
+	ExpectedCount    int     `json:"expected_count"`
+	RecallHitCount   int     `json:"recall_hit_count"`
+	RecallAtK        float64 `json:"recall_at_k"`
+	Route            string  `json:"route"`
+	RouteCorrect     bool    `json:"route_correct"`
+	LatencyMS        int64   `json:"latency_ms"`
+	EvaluationPassed bool    `json:"evaluation_passed"`
+	CitationCount    int     `json:"citation_count"`
+	Answered         bool    `json:"answered"`
+	OutcomeCorrect   bool    `json:"outcome_correct"`
 }
 
 type RetrievalSearchReq struct {
@@ -282,6 +292,7 @@ type RetrievalSearchReq struct {
 	TopK             int      `json:"top_k,optional"`
 	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
 	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+	ExpectedRoute    string   `json:"expected_route,optional"`
 }
 
 type RetrievalSearchResp struct {

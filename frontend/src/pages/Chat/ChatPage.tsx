@@ -25,7 +25,7 @@ import {
 import { SessionList } from './components/SessionList'
 import { RetrievalEvaluationModal } from './components/RetrievalEvaluationModal'
 import { useSubjectOverview } from './hooks/useSubjectOverview'
-import { askWithRetry as streamAskWithRetry, classifyChatFailure } from './streaming'
+import { askWithRetry as streamAskWithRetry, classifyChatFailure, localizeChatStatus } from './streaming'
 import type { ChatMessage, ChatSession } from './types'
 import { buildSessionTitle } from './utils'
 import './chat.css'
@@ -117,10 +117,6 @@ export function ChatPage() {
   const modelOptions = useMemo(
     () => getVendorModelCascaderOptions(activeModelOption.vendor),
     [activeModelOption.vendor],
-  )
-  const expandedSeries = useMemo(
-    () => modelOptions.find((option) => option.value === expandedSeriesKey),
-    [expandedSeriesKey, modelOptions],
   )
   const messages = activeSession?.messages ?? []
   const { subjectOverview, subjectOverviewLoading } = useSubjectOverview(subjectID)
@@ -419,7 +415,7 @@ export function ChatPage() {
         webSearch,
       )
     } catch (error) {
-      const failure = classifyChatFailure(error)
+		const failure = classifyChatFailure(error, t)
       updateMessage(session.id, messageID, {
         status: failure.status,
         errorReason: failure.detail,
@@ -476,6 +472,7 @@ export function ChatPage() {
         appendAnswer,
       },
       classifyChatFailure: (error) => classifyChatFailure(error, t),
+		localizeStatus: (status) => localizeChatStatus(status, t),
     })
   }
 
@@ -555,10 +552,6 @@ export function ChatPage() {
     setExpandedSeriesIndex(willCollapse ? -1 : index)
   }
 
-  function isActiveModelValue(value: string) {
-    return value === buildChatModelValue(activeModelOption.provider, activeModelOption.model)
-  }
-
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const container = event.currentTarget
     const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
@@ -603,6 +596,7 @@ export function ChatPage() {
               subjects={subjects}
               subjectOverview={subjectOverview}
               subjectOverviewLoading={subjectOverviewLoading}
+              onEvaluationOpen={() => setEvaluationOpen(true)}
             />
           </div>
         ) : (
@@ -641,12 +635,10 @@ export function ChatPage() {
           expandedSeriesKey={expandedSeriesKey}
           expandedSeriesIndex={expandedSeriesIndex}
           webSearch={webSearch}
-          evaluationDisabled={!subjectID || asking}
           onQuestionChange={setQuestion}
           onInputKeyDown={handleInputKeyDown}
           onSubjectChange={handleSubjectChange}
           onSubjectOpenChange={setSubjectSelectOpen}
-          onEvaluationOpen={() => setEvaluationOpen(true)}
           onWebSearchChange={setWebSearch}
           onModelDropdownOpenChange={handleModelDropdownOpenChange}
           onVendorChange={handleVendorChange}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
 	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/svc"
@@ -113,13 +114,7 @@ func buildDocumentNavigation(
 }
 
 func extractNavigationTopic(query string) string {
-	replacer := strings.NewReplacer(
-		"有哪些文档", "", "哪些文档", "", "什么文档", "", "哪些资料", "", "哪些文件", "",
-		"讲了", "", "讲的是", "", "相关", "", "关于", "", "包含", "", "提到", "",
-		"有哪些", "", "什么", "", "文档", "", "资料", "", "文件", "",
-		"吗", "", "？", "", "?", "", "的", " ",
-	)
-	topic := strings.Join(strings.Fields(replacer.Replace(query)), " ")
+	topic := strings.Join(strings.Fields(query), " ")
 	if topic == "" {
 		return "当前问题"
 	}
@@ -157,4 +152,54 @@ func routedChunkScore(topic, filename, section, content string) float64 {
 		}
 	}
 	return score
+}
+
+func routeKeywordTokens(text string) []string {
+	text = routeNormalizeText(text)
+	tokens := make([]string, 0)
+	var builder strings.Builder
+	for _, r := range text {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+			continue
+		}
+		if builder.Len() > 0 {
+			tokens = appendRouteToken(tokens, builder.String())
+			builder.Reset()
+		}
+	}
+	if builder.Len() > 0 {
+		tokens = appendRouteToken(tokens, builder.String())
+	}
+	return tokens
+}
+
+func appendRouteToken(tokens []string, token string) []string {
+	runes := []rune(token)
+	if len(runes) < 2 {
+		return tokens
+	}
+	if routeContainsHan(runes) {
+		for i := 0; i+1 < len(runes); i++ {
+			tokens = append(tokens, string(runes[i:i+2]))
+		}
+		tokens = append(tokens, token)
+		return tokens
+	}
+	return append(tokens, token)
+}
+
+func routeContainsHan(runes []rune) bool {
+	for _, r := range runes {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
+}
+
+func routeNormalizeText(text string) string {
+	text = strings.ToLower(strings.TrimSpace(text))
+	replacer := strings.NewReplacer("？", "", "?", "", "。", "", ".", "", "，", "", ",", "", "：", "", ":", "", "（", "", "）", "", "(", "", ")", "")
+	return replacer.Replace(text)
 }

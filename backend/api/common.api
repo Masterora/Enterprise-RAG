@@ -84,16 +84,24 @@ type RetrievalChunk {
 }
 
 type RetrievalMetrics {
-	OriginalQuery  string  `json:"original_query"`
-	SearchQuery    string  `json:"search_query"`
-	QueryRewritten bool    `json:"query_rewritten"`
-	Reranked       bool    `json:"reranked"`
-	TopK           int     `json:"top_k"`
-	CandidateCount int     `json:"candidate_count"`
-	ReturnedCount  int     `json:"returned_count"`
-	ExpectedCount  int     `json:"expected_count"`
-	RecallHitCount int     `json:"recall_hit_count"`
-	RecallAtK      float64 `json:"recall_at_k"`
+	OriginalQuery    string  `json:"original_query"`
+	SearchQuery      string  `json:"search_query"`
+	QueryRewritten   bool    `json:"query_rewritten"`
+	Reranked         bool    `json:"reranked"`
+	TopK             int     `json:"top_k"`
+	CandidateCount   int     `json:"candidate_count"`
+	ReturnedCount    int     `json:"returned_count"`
+	SubQueryCount    int     `json:"sub_query_count"`
+	ExpectedCount    int     `json:"expected_count"`
+	RecallHitCount   int     `json:"recall_hit_count"`
+	RecallAtK        float64 `json:"recall_at_k"`
+	Route            string  `json:"route"`
+	RouteCorrect     bool    `json:"route_correct"`
+	LatencyMS        int64   `json:"latency_ms"`
+	EvaluationPassed bool    `json:"evaluation_passed"`
+	CitationCount    int     `json:"citation_count"`
+	Answered         bool    `json:"answered"`
+	OutcomeCorrect   bool    `json:"outcome_correct"`
 }
 
 type ChatMessageInfo {

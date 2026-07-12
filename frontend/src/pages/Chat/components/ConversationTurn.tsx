@@ -117,7 +117,8 @@ function AnswerContent({
   chunks: RetrievalChunk[]
   externalLinks: ExternalLink[]
 }) {
-  if (!answer) {
+	const { t } = useI18n()
+	if (!answer) {
     return errorReason ? (
       <Typography.Paragraph className="answer-text answer-error-text">{errorReason}</Typography.Paragraph>
     ) : (
@@ -125,7 +126,9 @@ function AnswerContent({
     )
   }
 
-  const normalizedAnswer = normalizeAnswer(rewriteCitationReferences(messageID, stripExternalLinks(answer), chunks, externalLinks))
+	const normalizedAnswer = normalizeAnswer(
+		rewriteCitationReferences(messageID, stripExternalLinks(answer), chunks, externalLinks, t('chat.referenceFallback')),
+	)
   const cannotAnswer = isCannotAnswer(normalizedAnswer)
   return (
     <div className="answer-text">
@@ -329,11 +332,17 @@ function stripExternalLinks(answer: string) {
   return answer.replace(/\n{0,2}网络来源：[\s\S]*$/u, '').trim()
 }
 
-function rewriteCitationReferences(messageID: string, answer: string, chunks: RetrievalChunk[], externalLinks: ExternalLink[]) {
+function rewriteCitationReferences(
+	messageID: string,
+	answer: string,
+	chunks: RetrievalChunk[],
+	externalLinks: ExternalLink[],
+	referenceFallback: string,
+) {
   let rewritten = answer.replace(/\[引用(\d+)\]/gu, (_, rawIndex: string) => {
     const index = Number(rawIndex)
     const chunk = chunks[index - 1]
-    const title = chunk?.doc_name?.trim() || `引用来源${index}`
+		const title = chunk?.doc_name?.trim() || `${referenceFallback}${index}`
     const source = chunk?.source === 'vector' ? 'vector' : 'keyword'
     return `[${index}](#citation-${messageID}-${index} "${title}|||${source}")`
   })

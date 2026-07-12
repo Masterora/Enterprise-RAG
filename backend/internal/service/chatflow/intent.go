@@ -1,130 +1,91 @@
 package chatflow
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
-	"unicode"
+	"time"
+
+	"enterprise-rag/backend/internal/svc"
+	"enterprise-rag/backend/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
-func decideRoute(query string) routeDecision {
-	normalized := strings.TrimSpace(strings.ToLower(query))
-	if normalized == "" {
-		return routeDecision{route: QueryRouteRAG}
-	}
-
-	overviewScore := scoreOverviewIntent(normalized)
-	navigationScore := scoreNavigationIntent(normalized)
-	best := routeDecision{route: QueryRouteRAG}
-	if overviewScore >= navigationScore {
-		best.route = QueryRouteOverview
-		best.score = overviewScore
-		best.competingScore = navigationScore
-	} else {
-		best.route = QueryRouteNavigation
-		best.score = navigationScore
-		best.competingScore = overviewScore
-	}
-	if best.score < 3 || best.score-best.competingScore < 2 {
-		return routeDecision{route: QueryRouteRAG, score: best.score, competingScore: best.competingScore}
-	}
-	return best
+type QueryAnalysis struct {
+	Route       QueryRoute
+	SearchQuery string
 }
 
-func scoreOverviewIntent(query string) int {
-	score := 0
-	if containsAny(query,
-		"这个知识库有什么内容", "知识库有什么内容", "库里有什么内容", "这个库里有什么",
-		"知识库概览", "内容概览", "整体内容", "整体讲什么", "整体介绍",
-	) {
-		score += 6
+func AnalyzeQuery(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	query, llmProvider, llmModel string,
+) QueryAnalysis {
+	if strings.TrimSpace(query) == "" {
+		return QueryAnalysis{Route: QueryRouteFallback}
 	}
-	if containsAny(query,
-		"主要讲什么", "主要包含什么", "包含哪些内容", "都是什么内容", "覆盖哪些方向", "有什么内容",
-		"解决什么问题", "能解决什么问题", "解决哪些问题", "能做什么", "用来做什么", "适合做什么", "有什么用途", "应用场景",
-	) {
-		score += 4
+
+	client, err := ResolveLLM(ctx, svcCtx, &types.ChatAskReq{LlmProvider: llmProvider, LlmModel: llmModel})
+	if err != nil {
+		logx.WithContext(ctx).Errorf("chat route llm init failed, fallback to rag: err=%v", err)
+		return QueryAnalysis{Route: QueryRouteRAG}
 	}
-	if containsAny(query, "知识库", "这个库", "库里") {
-		score += 2
+
+	timeout := time.Duration(svcCtx.Config.Retrieval.RewriteTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 6 * time.Second
 	}
-	if containsAny(query, "为什么", "怎么", "如何", "是什么", "作用", "区别", "优势", "流程", "原理") {
-		score -= 3
+	routeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	response, err := client.Generate(routeCtx, BuildRoutePrompt(svcCtx.Config.Prompt, query), false)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("chat route classification failed, fallback to rag: err=%v", err)
+		return QueryAnalysis{Route: QueryRouteRAG}
 	}
-	if containsAny(query, "哪些文档", "哪篇文档", "哪份文档", "相关文档", "哪些文件", "哪些资料") {
-		score -= 4
+	analysis, ok := parseRouteResponse(response)
+	if !ok {
+		logx.WithContext(ctx).Errorf("chat route returned invalid response, fallback to rag: response=%q", response)
+		return QueryAnalysis{Route: QueryRouteRAG}
 	}
-	return score
+	if analysis.Route == QueryRouteRAG || analysis.Route == QueryRouteNavigation {
+		analysis.SearchQuery = sanitizeRouteSearchQuery(query, analysis.SearchQuery)
+	}
+	return analysis
 }
 
-func scoreNavigationIntent(query string) int {
-	score := 0
-	if containsAny(query,
-		"有哪些文档", "哪些文档", "什么文档", "哪些资料", "哪些文件",
-		"哪篇文档", "哪份文档", "相关文档", "相关资料", "哪个文件", "哪份资料",
-	) {
-		score += 6
+func parseRouteResponse(response string) (QueryAnalysis, bool) {
+	response = strings.TrimSpace(response)
+	start := strings.Index(response, "{")
+	end := strings.LastIndex(response, "}")
+	if start < 0 || end < start {
+		return QueryAnalysis{}, false
 	}
-	if containsAny(query, "在哪个文档", "在哪篇文档", "可优先看", "看哪篇", "看哪个文件", "来源于哪篇文档") {
-		score += 5
+	var result struct {
+		Route       string `json:"route"`
+		SearchQuery string `json:"search_query"`
 	}
-	if containsAny(query, "文档", "资料", "文件") {
-		score += 2
+	if err := json.Unmarshal([]byte(response[start:end+1]), &result); err != nil {
+		return QueryAnalysis{}, false
 	}
-	if containsAny(query, "这个知识库", "知识库概览", "整体内容") {
-		score -= 4
+	route := QueryRoute(strings.ToLower(strings.TrimSpace(result.Route)))
+	switch route {
+	case QueryRouteRAG, QueryRouteOverview, QueryRouteNavigation, QueryRouteFallback:
+		return QueryAnalysis{Route: route, SearchQuery: strings.TrimSpace(result.SearchQuery)}, true
+	default:
+		return QueryAnalysis{}, false
 	}
-	if containsAny(query, "为什么", "怎么", "如何", "是什么", "作用", "区别", "优势") &&
-		!containsAny(query, "在哪个文档", "哪篇文档", "哪些文档", "相关文档") {
-		score -= 3
-	}
-	return score
 }
 
-func routeKeywordTokens(text string) []string {
-	text = routeNormalizeText(text)
-	tokens := make([]string, 0)
-	var builder strings.Builder
-	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			builder.WriteRune(r)
-			continue
-		}
-		if builder.Len() > 0 {
-			tokens = appendRouteToken(tokens, builder.String())
-			builder.Reset()
-		}
+func sanitizeRouteSearchQuery(original, searchQuery string) string {
+	searchQuery = strings.Trim(strings.TrimSpace(searchQuery), "`\"'“”‘’")
+	searchQuery = strings.Join(strings.Fields(strings.ReplaceAll(searchQuery, "\n", " ")), " ")
+	if searchQuery == "" || strings.EqualFold(searchQuery, "无法确定") {
+		return strings.TrimSpace(original)
 	}
-	if builder.Len() > 0 {
-		tokens = appendRouteToken(tokens, builder.String())
+	if runes := []rune(searchQuery); len(runes) > 120 {
+		return string(runes[:120])
 	}
-	return tokens
-}
-
-func appendRouteToken(tokens []string, token string) []string {
-	runes := []rune(token)
-	if len(runes) < 2 {
-		return tokens
-	}
-	if routeContainsHan(runes) {
-		for i := 0; i+1 < len(runes); i++ {
-			tokens = append(tokens, string(runes[i:i+2]))
-		}
-		tokens = append(tokens, token)
-		return tokens
-	}
-	return append(tokens, token)
-}
-
-func routeContainsHan(runes []rune) bool {
-	for _, r := range runes {
-		if unicode.Is(unicode.Han, r) {
-			return true
-		}
-	}
-	return false
-}
-
-func routeNormalizeText(text string) string {
-	text = strings.ToLower(strings.TrimSpace(text))
-	replacer := strings.NewReplacer("？", "", "?", "", "。", "", ".", "", "，", "", ",", "", "：", "", ":", "", "（", "", "）", "", "(", "", ")", "")
-	return replacer.Replace(text)
+	return searchQuery
 }

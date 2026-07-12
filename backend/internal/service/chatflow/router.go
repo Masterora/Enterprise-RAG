@@ -16,35 +16,33 @@ const (
 	QueryRouteRAG        QueryRoute = "rag"
 	QueryRouteOverview   QueryRoute = "overview"
 	QueryRouteNavigation QueryRoute = "navigation"
+	QueryRouteFallback   QueryRoute = "fallback"
 )
-
-type routeDecision struct {
-	route          QueryRoute
-	score          int
-	competingScore int
-}
-
-func RouteQuery(query string) QueryRoute {
-	return decideRoute(query).route
-}
 
 func ResolveRoutedAnswer(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
 	userID, subjectID, query, llmProvider, llmModel string,
-) (QueryRoute, string, []types.RetrievalChunk, bool, error) {
-	decision := decideRoute(query)
-	logx.WithContext(ctx).Infof("chat route decision: route=%s score=%d competing=%d query=%q", decision.route, decision.score, decision.competingScore, query)
+) (QueryRoute, string, string, []types.RetrievalChunk, bool, error) {
+	analysis := AnalyzeQuery(ctx, svcCtx, query, llmProvider, llmModel)
+	route := analysis.Route
+	logx.WithContext(ctx).Infof("chat route decision: route=%s query=%q", route, query)
 
-	switch decision.route {
+	switch route {
 	case QueryRouteOverview:
 		answer, chunks, err := buildKnowledgeOverview(ctx, svcCtx, userID, subjectID, query, llmProvider, llmModel)
-		return QueryRouteOverview, answer, chunks, true, err
+		return QueryRouteOverview, analysis.SearchQuery, answer, chunks, true, err
 	case QueryRouteNavigation:
-		answer, chunks, err := buildDocumentNavigation(ctx, svcCtx, userID, subjectID, query)
-		return QueryRouteNavigation, answer, chunks, true, err
+		navigationQuery := analysis.SearchQuery
+		if strings.TrimSpace(navigationQuery) == "" {
+			navigationQuery = query
+		}
+		answer, chunks, err := buildDocumentNavigation(ctx, svcCtx, userID, subjectID, navigationQuery)
+		return QueryRouteNavigation, analysis.SearchQuery, answer, chunks, true, err
+	case QueryRouteFallback:
+		return QueryRouteFallback, analysis.SearchQuery, "请提出与当前知识库内容相关的具体问题。", nil, true, nil
 	default:
-		return QueryRouteRAG, "", nil, false, nil
+		return QueryRouteRAG, analysis.SearchQuery, "", nil, false, nil
 	}
 }
 

@@ -1,3 +1,5 @@
+import { ExperimentOutlined } from '@ant-design/icons'
+import { Button } from 'antd'
 import type { SubjectInfo } from '../../../api/subjects'
 import { useI18n } from '../../../useI18n'
 import type { SubjectOverview } from '../hooks/useSubjectOverview'
@@ -7,10 +9,18 @@ type Props = {
   subjects: SubjectInfo[]
   subjectOverview: SubjectOverview | null
   subjectOverviewLoading: boolean
+  onEvaluationOpen: () => void
 }
 
-export function ChatEmptyState({ subjectID, subjects, subjectOverview, subjectOverviewLoading }: Props) {
+export function ChatEmptyState({
+  subjectID,
+  subjects,
+  subjectOverview,
+  subjectOverviewLoading,
+  onEvaluationOpen,
+}: Props) {
   const { t } = useI18n()
+  const readiness = getReadinessText(subjectOverview, subjectOverviewLoading, t)
 
   return (
     <div className="chat-empty-state">
@@ -24,60 +34,47 @@ export function ChatEmptyState({ subjectID, subjects, subjectOverview, subjectOv
                 name: subjects.find((subject) => subject.id === subjectID)?.name ?? t('chat.selectSubject'),
               })}
             </strong>
-            <span>{subjectOverviewLoading ? t('chat.overview.loading') : t('chat.overview.ready')}</span>
+            <div className="chat-subject-overview-actions">
+              <span className="chat-subject-overview-readiness">{readiness}</span>
+              <Button
+                type="text"
+                size="small"
+                icon={<ExperimentOutlined />}
+                disabled={!subjectOverview?.indexed}
+                onClick={onEvaluationOpen}
+              >
+                {t('chat.evaluation.title')}
+              </Button>
+            </div>
           </div>
-          {subjectOverview ? (
-            <>
-              <div className="chat-subject-overview-metrics">
-                <div>
-                  <span>{t('chat.overview.totalDocuments')}</span>
-                  <strong>{subjectOverview.total}</strong>
-                </div>
-                <div>
-                  <span>{t('chat.overview.indexedDocuments')}</span>
-                  <strong>{subjectOverview.indexed}</strong>
-                </div>
-                <div>
-                  <span>{t('chat.overview.processingDocuments')}</span>
-                  <strong>{subjectOverview.processing}</strong>
-                </div>
-                <div>
-                  <span>{t('chat.overview.failedDocuments')}</span>
-                  <strong>{subjectOverview.failed}</strong>
-                </div>
-              </div>
-              <div className="chat-subject-overview-sections">
-                <div className="chat-subject-overview-block">
-                  <span>{t('chat.overview.fileTypes')}</span>
-                  <div className="chat-subject-overview-tags">
-                    {subjectOverview.fileTypes.length > 0 ? (
-                      subjectOverview.fileTypes.map((item) => (
-                        <span className="chat-subject-overview-tag" key={item.type}>
-                          {item.type} · {item.count}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="chat-subject-overview-empty">{t('chat.overview.empty')}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="chat-subject-overview-block">
-                  <span>{t('chat.overview.recentDocuments')}</span>
-                  <ul>
-                    {subjectOverview.recentDocuments.length > 0 ? (
-                      subjectOverview.recentDocuments.map((item) => <li key={item.id}>{item.filename}</li>)
-                    ) : (
-                      <li className="chat-subject-overview-empty">{t('chat.overview.empty')}</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="chat-subject-overview-empty">{t('chat.overview.empty')}</div>
-          )}
         </div>
       ) : null}
     </div>
   )
+}
+
+function getReadinessText(
+  overview: SubjectOverview | null,
+  loading: boolean,
+  t: (key: string, values?: Record<string, string | number>) => string,
+) {
+  if (loading) {
+    return t('chat.overview.loading')
+  }
+  if (!overview || overview.total === 0) {
+    return t('chat.overview.noDocuments')
+  }
+  if (overview.indexed === 0 && overview.processing > 0) {
+    return t('chat.overview.processingStatus', { count: overview.processing })
+  }
+  if (overview.indexed === 0) {
+    return t('chat.overview.noAnswerable')
+  }
+  if (overview.processing > 0) {
+    return t('chat.overview.partiallyReady', { indexed: overview.indexed, processing: overview.processing })
+  }
+  if (overview.failed > 0) {
+    return t('chat.overview.readyWithFailures', { indexed: overview.indexed, failed: overview.failed })
+  }
+  return t('chat.overview.ready', { count: overview.indexed })
 }

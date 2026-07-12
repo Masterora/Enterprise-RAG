@@ -116,7 +116,7 @@ func buildKnowledgeOverview(
 		citations = append(citations, *unique[index].chunk)
 	}
 
-	draft := buildStructuredKnowledgeOverview(query, subject.Name, len(documents), themes, unique[:limit], citations)
+	draft := buildStructuredKnowledgeOverview(subject.Name, len(documents), themes, unique[:limit], citations)
 	if overview, err := polishKnowledgeOverview(ctx, svcCtx, query, draft, unique[:limit], llmProvider, llmModel); err == nil && strings.TrimSpace(overview) != "" {
 		return formatOverviewAnswer(strings.TrimSpace(overview)), citations, nil
 	} else if err != nil {
@@ -189,7 +189,8 @@ func polishKnowledgeOverview(
 	for _, summary := range summaries {
 		formattedSummaries = append(formattedSummaries, *summary)
 	}
-	answer, err := client.Generate(ctx, BuildOverviewPolishPrompt(svcCtx.Config.Prompt, query, draft, formattedSummaries), false)
+	answer, err := GenerateAnswer(ctx, client, svcCtx.Config.Reliability,
+		BuildOverviewPolishPrompt(svcCtx.Config.Prompt, query, draft, formattedSummaries))
 	if err != nil {
 		return "", err
 	}
@@ -216,9 +217,9 @@ func resolveRouteLLM(svcCtx *svc.ServiceContext, provider, model string) (llm.Cl
 	return llm.NewClient(override)
 }
 
-func buildStructuredKnowledgeOverview(query, subjectName string, documentCount int, themes []string, summaries []*overviewDocSummary, citations []types.RetrievalChunk) string {
+func buildStructuredKnowledgeOverview(subjectName string, documentCount int, themes []string, summaries []*overviewDocSummary, citations []types.RetrievalChunk) string {
 	lines := make([]string, 0, len(summaries)+2)
-	lines = append(lines, buildOverviewLead(query, subjectName, documentCount, themes, citations))
+	lines = append(lines, buildOverviewLead(subjectName, documentCount, themes, citations))
 	for index, summary := range summaries {
 		title := buildOverviewTitle(summary)
 		description := buildOverviewDescription(summary)
@@ -245,24 +246,15 @@ func formatOverviewAnswer(answer string) string {
 	return strings.Join(lines, "\n")
 }
 
-func buildOverviewLead(query, subjectName string, documentCount int, themes []string, citations []types.RetrievalChunk) string {
+func buildOverviewLead(subjectName string, documentCount int, themes []string, citations []types.RetrievalChunk) string {
 	lead := fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档。", subjectName, documentCount)
-	if len(themes) > 0 && isUseCaseOverviewQuery(query) {
-		lead = fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档，主要可用于支撑 %s 相关的协议理解、方案实现、联调排障与规范查阅。", subjectName, documentCount, strings.Join(themes, "、"))
-	} else if len(themes) > 0 {
+	if len(themes) > 0 {
 		lead = fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档，主要覆盖 %s 等方向。", subjectName, documentCount, strings.Join(themes, "、"))
 	}
 	if refs := buildOverviewReferenceSuffix(citations, minInt(len(citations), 3)); refs != "" {
 		lead = lead + " " + refs
 	}
 	return lead
-}
-
-func isUseCaseOverviewQuery(query string) bool {
-	query = strings.TrimSpace(strings.ToLower(query))
-	return containsAny(query,
-		"解决什么问题", "能解决什么问题", "解决哪些问题", "能做什么", "用来做什么", "适合做什么", "有什么用途", "应用场景",
-	)
 }
 
 func buildOverviewReferenceSuffix(citations []types.RetrievalChunk, limit int) string {

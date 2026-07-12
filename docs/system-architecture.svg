@@ -48,7 +48,7 @@
 
     <rect x="880" y="190" width="238" height="44" rx="8" fill="#26334A"/>
     <text x="900" y="208" class="name">运行治理</text>
-    <text x="900" y="226" class="body">错误转换 · 任务日志 · 状态追踪</text>
+    <text x="900" y="226" class="body">任务日志 · 状态追踪 · 检索评估</text>
   </g>
 
   <!-- Split -->
@@ -132,7 +132,7 @@
     <rect x="452" y="667" width="152" height="56" rx="9" fill="#253148"/>
     <text x="470" y="691" class="name">MinIO</text><text x="470" y="710" class="body">原始文档存储</text>
     <rect x="622" y="667" width="180" height="56" rx="9" fill="#204238"/>
-    <text x="640" y="691" class="name">NATS · Redis</text><text x="640" y="710" class="body">任务队列 · 缓存</text>
+    <text x="640" y="691" class="name">NATS JetStream</text><text x="640" y="710" class="body">异步任务 · 失败重试</text>
     <rect x="820" y="667" width="304" height="56" rx="9" fill="#382A59"/>
     <text x="838" y="691" class="name">模型与网络服务</text><text x="838" y="710" class="body">对话模型 · Embedding · 外部网页搜索</text>
   </g>

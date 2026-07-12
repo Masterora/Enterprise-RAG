@@ -35,8 +35,8 @@ func (r *ChunkRepo) ReplaceByDocument(ctx context.Context, chunks []model.Docume
 		if _, err := tx.Exec(
 			ctx,
 			`INSERT INTO document_chunks
-			 (id, doc_id, subject_id, user_id, chunk_index, content, page, section, token_count, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+			 (id, doc_id, subject_id, user_id, chunk_index, content, page, section, metadata, token_count, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)`,
 			chunk.ID,
 			chunk.DocID,
 			chunk.SubjectID,
@@ -45,6 +45,7 @@ func (r *ChunkRepo) ReplaceByDocument(ctx context.Context, chunks []model.Docume
 			chunk.Content,
 			chunk.Page,
 			chunk.Section,
+			chunk.Metadata,
 			chunk.TokenCount,
 			chunk.CreatedAt,
 		); err != nil {
@@ -59,7 +60,7 @@ func (r *ChunkRepo) ReplaceByDocument(ctx context.Context, chunks []model.Docume
 func (r *ChunkRepo) ListByDocument(ctx context.Context, docID string) ([]model.DocumentChunk, error) {
 	rows, err := r.db.Query(
 		ctx,
-		`SELECT id::text, doc_id::text, subject_id::text, user_id::text, chunk_index, content, COALESCE(page, 0), COALESCE(section, ''), COALESCE(token_count, 0), created_at, updated_at
+		`SELECT id::text, doc_id::text, subject_id::text, user_id::text, chunk_index, content, COALESCE(page, 0), COALESCE(section, ''), COALESCE(metadata, '{}'::jsonb), COALESCE(token_count, 0), created_at, updated_at
 		 FROM document_chunks
 		 WHERE doc_id = $1 AND deleted_at IS NULL
 		 ORDER BY chunk_index ASC`,
@@ -82,6 +83,7 @@ func (r *ChunkRepo) ListByDocument(ctx context.Context, docID string) ([]model.D
 			&chunk.Content,
 			&chunk.Page,
 			&chunk.Section,
+			&chunk.Metadata,
 			&chunk.TokenCount,
 			&chunk.CreatedAt,
 			&chunk.UpdatedAt,
@@ -96,7 +98,7 @@ func (r *ChunkRepo) ListByDocument(ctx context.Context, docID string) ([]model.D
 func (r *ChunkRepo) ListBySubject(ctx context.Context, subjectID string) ([]model.DocumentChunk, error) {
 	rows, err := r.db.Query(
 		ctx,
-		`SELECT id::text, doc_id::text, subject_id::text, user_id::text, chunk_index, content, COALESCE(page, 0), COALESCE(section, ''), COALESCE(token_count, 0), created_at, updated_at
+		`SELECT id::text, doc_id::text, subject_id::text, user_id::text, chunk_index, content, COALESCE(page, 0), COALESCE(section, ''), COALESCE(metadata, '{}'::jsonb), COALESCE(token_count, 0), created_at, updated_at
 		 FROM document_chunks
 		 WHERE subject_id = $1 AND deleted_at IS NULL
 		 ORDER BY chunk_index ASC`,
@@ -119,6 +121,7 @@ func (r *ChunkRepo) ListBySubject(ctx context.Context, subjectID string) ([]mode
 			&chunk.Content,
 			&chunk.Page,
 			&chunk.Section,
+			&chunk.Metadata,
 			&chunk.TokenCount,
 			&chunk.CreatedAt,
 			&chunk.UpdatedAt,

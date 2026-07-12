@@ -1,5 +1,5 @@
 import { Button, Dropdown, Input, Select, Switch, Tooltip } from 'antd'
-import { DownOutlined, ExperimentOutlined, GlobalOutlined, RightOutlined, SendOutlined } from '@ant-design/icons'
+import { DownOutlined, GlobalOutlined, RightOutlined, SendOutlined } from '@ant-design/icons'
 import type { KeyboardEvent } from 'react'
 import type { SubjectInfo } from '../../../api/subjects'
 import { useI18n } from '../../../useI18n'
@@ -25,12 +25,10 @@ type Props = {
   expandedSeriesKey: string
   expandedSeriesIndex: number
   webSearch: boolean
-  evaluationDisabled: boolean
   onQuestionChange: (value: string) => void
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onSubjectChange: (value: string) => void
   onSubjectOpenChange: (open: boolean) => void
-  onEvaluationOpen: () => void
   onWebSearchChange: (checked: boolean) => void
   onModelDropdownOpenChange: (open: boolean) => void
   onVendorChange: (value: string) => void
@@ -57,12 +55,10 @@ export function ChatComposer({
   expandedSeriesKey,
   expandedSeriesIndex,
   webSearch,
-  evaluationDisabled,
   onQuestionChange,
   onInputKeyDown,
   onSubjectChange,
   onSubjectOpenChange,
-  onEvaluationOpen,
   onWebSearchChange,
   onModelDropdownOpenChange,
   onVendorChange,
@@ -76,6 +72,19 @@ export function ChatComposer({
 
   return (
     <div className="chat-composer">
+      {!question && !asking ? (
+        <div className="chat-suggestions" aria-label={t('chat.suggestions.title')}>
+          <span>{t('chat.suggestions.title')}</span>
+          {[
+            t('chat.suggestions.overview'),
+            t('chat.suggestions.useCases'),
+          ].map((suggestion) => (
+            <button key={suggestion} type="button" onClick={() => onQuestionChange(suggestion)}>
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <Input.TextArea
         value={question}
         onChange={(event) => onQuestionChange(event.target.value)}
@@ -100,15 +109,6 @@ export function ChatComposer({
             placement="topLeft"
             variant="borderless"
           />
-          <Tooltip title={t('chat.evaluation.title')}>
-            <Button
-              type="text"
-              icon={<ExperimentOutlined />}
-              aria-label={t('chat.evaluation.title')}
-              disabled={evaluationDisabled}
-              onClick={onEvaluationOpen}
-            />
-          </Tooltip>
           <Tooltip title={t('chat.webSearchHint')}>
             <label className="chat-web-search">
               <GlobalOutlined />

@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { listDocuments, type DocumentInfo } from '../../../api/documents'
+import { listDocuments } from '../../../api/documents'
 
 export type SubjectOverview = {
   total: number
   indexed: number
   failed: number
   processing: number
-  recentDocuments: DocumentInfo[]
-  fileTypes: { type: string; count: number }[]
 }
 
 export function useSubjectOverview(subjectID: string) {
@@ -30,12 +28,6 @@ export function useSubjectOverview(subjectID: string) {
           return
         }
 
-        const typeMap = new Map<string, number>()
-        for (const item of data.list) {
-          const type = (item.file_type || 'unknown').toLowerCase()
-          typeMap.set(type, (typeMap.get(type) ?? 0) + 1)
-        }
-
         setSubjectOverview({
           total: data.total,
           indexed: data.list.filter((item) => item.status === 'indexed').length,
@@ -43,13 +35,6 @@ export function useSubjectOverview(subjectID: string) {
           processing: data.list.filter((item) =>
             ['uploaded', 'parsing', 'parsed', 'chunking', 'chunked', 'embedding', 'deleting'].includes(item.status),
           ).length,
-          recentDocuments: [...data.list]
-            .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
-            .slice(0, 5),
-          fileTypes: Array.from(typeMap.entries())
-            .map(([type, count]) => ({ type, count }))
-            .sort((left, right) => right.count - left.count)
-            .slice(0, 4),
         })
       } catch {
         if (!cancelled) {

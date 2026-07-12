@@ -42,6 +42,7 @@ import {
 import { retryIndexTask, type IndexTaskInfo, type ParseLogInfo } from '../../api/documents'
 import { listSubjects, type SubjectInfo } from '../../api/subjects'
 import { useI18n } from '../../useI18n'
+import { translateErrorMessage, translateTaskMessage } from '../../utils/errorMessage'
 
 const refreshInterval = 5000
 const taskLimit = 500
@@ -224,68 +225,11 @@ export function RuntimeLogsPage() {
   }
 
   function translateTaskErrorMessage(errorMessage: string) {
-    const message = errorMessage.trim()
-    const normalized = message.toLowerCase()
-
-    if (!message) {
-      return ''
-    }
-    if (normalized.includes('incorrect api key provided') || normalized.includes('invalid api-key provided') || normalized.includes('invalid_api_key')) {
-      return t('logs.error.invalidApiKey')
-    }
-    if (normalized.includes('request timeout') || normalized.includes('context deadline exceeded') || normalized.includes('deadline exceeded') || normalized.includes('timeout')) {
-      return t('logs.error.timeout')
-    }
-    if (normalized.includes('no rows in result set')) {
-      return t('logs.error.noRows')
-    }
-    if (normalized.includes('openai responses request failed')) {
-      return t('logs.error.openaiResponses')
-    }
-    if (normalized.includes('openai embeddings request failed')) {
-      return t('logs.error.openaiEmbeddings')
-    }
-    if (normalized.includes('llm compatible chat request failed')) {
-      return t('logs.error.compatibleChat')
-    }
-    if (normalized.includes('llm compatible stream request failed')) {
-      return t('logs.error.compatibleStream')
-    }
-    if (normalized.includes('embedding compatible request failed')) {
-      return t('logs.error.compatibleEmbedding')
-    }
-	if (normalized.includes('query rewrite failed')) {
-		return t('logs.error.queryRewrite')
-	}
-    if (normalized.includes('pdf') && (normalized.includes('加密') || normalized.includes('encryption version') || normalized.includes('filter /standard'))) {
-      return t('logs.error.encryptedPdf')
-    }
-    if (normalized.includes('未启用 ocr') || normalized.includes('ocr is not enabled') || normalized.includes('image-heavy')) {
-      return t('logs.error.ocrRequired')
-    }
-    if (normalized.includes('unsupported document type') || message.includes('暂不支持该文件格式')) {
-      return t('logs.error.unsupportedDocumentType')
-    }
-	if (normalized.includes('task is no longer retryable')) {
-		return t('logs.error.taskNotRetryable')
-	}
-
-    return message
+		return translateErrorMessage(errorMessage, t)
   }
 
   function translateLogMessage(rawMessage: string) {
-    const message = rawMessage.trim()
-    const normalized = message.toLowerCase()
-    if (!message) {
-      return '-'
-    }
-    if (normalized.startsWith('parse retry scheduled')) {
-      return t('logs.message.retryScheduled')
-    }
-    if (message === 'document parsed') {
-      return t('logs.message.documentParsed')
-    }
-    return message
+		return translateTaskMessage(rawMessage, t)
   }
 
   const runningTaskTypes = new Set(
