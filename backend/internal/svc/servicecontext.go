@@ -20,6 +20,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/nats-io/nats.go"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 type ServiceContext struct {
@@ -30,12 +31,14 @@ type ServiceContext struct {
 	Embedder       embedding.Embedder
 	LLM            llm.Client
 	MilvusStore    *milvusinfra.Store
-	AuthMiddleware *middleware.AuthMiddleware
+	AuthMiddleware rest.Middleware
 	UserRepo       repository.UserRepository
 	SubjectRepo    repository.SubjectRepository
 	DocumentRepo   repository.DocumentRepository
 	ChunkRepo      repository.ChunkRepository
 	IndexTaskRepo  repository.IndexTaskRepository
+	ChatRepo       repository.ChatRepository
+	AdminRepo      repository.AdminRepository
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -83,11 +86,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Embedder:       embedder,
 		LLM:            llmClient,
 		MilvusStore:    milvusStore,
-		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth),
+		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth).Handle,
 		UserRepo:       pgrepo.NewUserRepo(db),
 		SubjectRepo:    pgrepo.NewSubjectRepo(db),
 		DocumentRepo:   pgrepo.NewDocumentRepo(db),
 		ChunkRepo:      pgrepo.NewChunkRepo(db),
 		IndexTaskRepo:  pgrepo.NewIndexTaskRepo(db),
+		ChatRepo:       pgrepo.NewChatRepo(db),
+		AdminRepo:      pgrepo.NewAdminRepo(db),
 	}
 }

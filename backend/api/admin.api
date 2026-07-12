@@ -1,0 +1,73 @@
+syntax = "v1"
+
+type AdminTaskListReq {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	TaskType  string `json:"task_type,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type AdminTaskListResp {
+	List  []IndexTaskInfo `json:"list"`
+	Total int64           `json:"total"`
+}
+
+type AdminTaskClearResp {
+	Cleared int64 `json:"cleared"`
+}
+
+type AdminLogClearReq {
+	SubjectID string `json:"subject_id,optional"`
+}
+
+type AdminLogClearResp {
+	Cleared int64 `json:"cleared"`
+}
+
+type AdminLogListReq {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type AdminLogListResp {
+	List  []ParseLogInfo `json:"list"`
+	Total int64          `json:"total"`
+}
+
+type AdminSummaryResp {
+	SubjectTotal     int64 `json:"subject_total"`
+	DocumentTotal    int64 `json:"document_total"`
+	ChunkTotal       int64 `json:"chunk_total"`
+	SessionTotal     int64 `json:"session_total"`
+	IndexedTotal     int64 `json:"indexed_total"`
+	ProcessingTotal  int64 `json:"processing_total"`
+	FailedTotal      int64 `json:"failed_total"`
+	PendingTaskTotal int64 `json:"pending_task_total"`
+	RunningTaskTotal int64 `json:"running_task_total"`
+	FailedTaskTotal  int64 `json:"failed_task_total"`
+}
+
+@server (
+	group:      admin
+	middleware: AuthMiddleware
+)
+service rag-api {
+	@handler AdminSummaryHandler
+	post /api/admin/summary returns (AdminSummaryResp)
+
+	@handler AdminTaskListHandler
+	post /api/admin/tasks/list (AdminTaskListReq) returns (AdminTaskListResp)
+
+	@handler AdminTaskClearHandler
+	post /api/admin/tasks/clear returns (AdminTaskClearResp)
+
+	@handler AdminLogListHandler
+	post /api/admin/logs/list (AdminLogListReq) returns (AdminLogListResp)
+
+	@handler AdminLogClearHandler
+	post /api/admin/logs/clear (AdminLogClearReq) returns (AdminLogClearResp)
+}
+

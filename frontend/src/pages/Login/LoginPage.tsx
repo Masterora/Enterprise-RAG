@@ -1,5 +1,5 @@
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
-import { Button, Form, Input, Tabs, message } from 'antd'
+import { Button, Card, Form, Input, Tabs, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { login, register, setAuthToken } from '../../api/auth'
 import { ActionIconButton } from '../../components/ActionIconButton'
@@ -23,7 +23,7 @@ export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPag
       setAuthToken(result.token)
       onAuthSuccess(result.token)
       message.success(t('login.success', { username: result.user.nickname || result.user.username }))
-      navigate('/dashboard')
+      navigate('/chat')
     } catch {
       message.error(t('login.failed'))
     }
@@ -43,7 +43,7 @@ export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPag
       message.success(
         t('register.success', { username: result.user.nickname || result.user.username }),
       )
-      navigate('/dashboard')
+      navigate('/chat')
     } catch {
       message.error(t('register.failed'))
     }
@@ -51,7 +51,7 @@ export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPag
 
   return (
     <main className={`login-page ${isDarkMode ? 'theme-dark' : 'theme-light'}`}>
-      <section className="login-panel">
+      <Card className="login-card">
         <div className="login-topbar">
           <ActionIconButton
             icon={isDarkMode ? <MoonOutlined /> : <SunOutlined />}
@@ -60,8 +60,8 @@ export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPag
             effect="theme"
           />
         </div>
-        <h1 className="login-title">Enterprise RAG</h1>
-        <p className="login-desc">{t('login.description')}</p>
+        <Typography.Title level={2} className="login-title">Enterprise RAG</Typography.Title>
+        <Typography.Paragraph className="login-desc">{t('login.description')}</Typography.Paragraph>
         <Tabs
           items={[
             {
@@ -159,7 +159,7 @@ export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPag
             },
           ]}
         />
-      </section>
+      </Card>
     </main>
   )
 }

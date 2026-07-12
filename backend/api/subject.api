@@ -1,0 +1,71 @@
+syntax = "v1"
+
+type SubjectCreateReq {
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectCreateResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectUpdateReq {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,optional"`
+	Visibility  string `json:"visibility,optional"`
+}
+
+type SubjectUpdateResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+type SubjectDeleteReq {
+	ID string `json:"id"`
+}
+
+type SubjectDeleteResp {
+	Deleted bool `json:"deleted"`
+}
+
+type SubjectListReq {
+	Keyword  string `json:"keyword,optional"`
+	Page     int    `json:"page,optional"`
+	PageSize int    `json:"page_size,optional"`
+}
+
+type SubjectListResp {
+	List  []SubjectInfo `json:"list"`
+	Total int64         `json:"total"`
+}
+
+type SubjectDetailReq {
+	ID string `json:"id"`
+}
+
+type SubjectDetailResp {
+	Subject SubjectInfo `json:"subject"`
+}
+
+@server (
+	group:      subject
+	middleware: AuthMiddleware
+)
+service rag-api {
+	@handler SubjectCreateHandler
+	post /api/subjects/create (SubjectCreateReq) returns (SubjectCreateResp)
+
+	@handler SubjectUpdateHandler
+	post /api/subjects/update (SubjectUpdateReq) returns (SubjectUpdateResp)
+
+	@handler SubjectDeleteHandler
+	post /api/subjects/delete (SubjectDeleteReq) returns (SubjectDeleteResp)
+
+	@handler SubjectListHandler
+	post /api/subjects/list (SubjectListReq) returns (SubjectListResp)
+
+	@handler SubjectDetailHandler
+	post /api/subjects/detail (SubjectDetailReq) returns (SubjectDetailResp)
+}
+

@@ -57,6 +57,29 @@ export function RootApp() {
           },
           Card: {
             colorBgContainer: isDarkMode ? '#171a21' : '#ffffff',
+            headerBg: isDarkMode ? '#171a21' : '#ffffff',
+          },
+          Collapse: {
+            headerBg: isDarkMode ? '#171a21' : '#ffffff',
+            contentBg: isDarkMode ? '#171a21' : '#ffffff',
+            borderlessContentBg: isDarkMode ? '#171a21' : '#ffffff',
+          },
+          Input: {
+            activeBorderColor: isDarkMode ? '#7c9cff' : '#315efb',
+            hoverBorderColor: isDarkMode ? '#3a4354' : '#315efb',
+            colorBgContainer: isDarkMode ? '#11141a' : '#ffffff',
+            colorText: isDarkMode ? '#f3f6fb' : '#1a2233',
+            colorTextPlaceholder: isDarkMode ? '#7f8aa0' : '#98a2b3',
+          },
+          Select: {
+            optionSelectedBg: isDarkMode ? '#1c2330' : '#eef3ff',
+            colorBgContainer: isDarkMode ? '#11141a' : '#ffffff',
+            colorText: isDarkMode ? '#f3f6fb' : '#1a2233',
+          },
+          Tabs: {
+            itemColor: isDarkMode ? '#a4adbd' : '#667085',
+            itemSelectedColor: isDarkMode ? '#f3f6fb' : '#1a2233',
+            inkBarColor: isDarkMode ? '#7c9cff' : '#315efb',
           },
           Table: {
             headerBg: isDarkMode ? '#171a21' : '#f8faff',

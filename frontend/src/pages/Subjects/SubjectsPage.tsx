@@ -1,7 +1,14 @@
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
-import { Button, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Table, Typography, message } from 'antd'
+import { Button, Card, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Table, Typography, message } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
-import { createSubject, deleteSubject, listSubjects, updateSubject, type SubjectInfo } from '../../api/subjects'
+import {
+  createSubject,
+  deleteSubject,
+  isSubjectNameConflict,
+  listSubjects,
+  updateSubject,
+  type SubjectInfo,
+} from '../../api/subjects'
 import { useI18n } from '../../useI18n'
 
 export function SubjectsPage() {
@@ -41,8 +48,10 @@ export function SubjectsPage() {
       form.resetFields()
       message.success(t('subjects.createSuccess'))
       await loadSubjects(1)
-    } catch {
-      message.error(t('subjects.createFailed'))
+    } catch (error) {
+      message.error(
+        isSubjectNameConflict(error) ? t('subjects.nameDuplicate') : t('subjects.createFailed'),
+      )
     } finally {
       setSaving(false)
     }
@@ -64,8 +73,10 @@ export function SubjectsPage() {
       setEditingSubject(null)
       editForm.resetFields()
       await loadSubjects(page)
-    } catch {
-      message.error(t('subjects.updateFailed'))
+    } catch (error) {
+      message.error(
+        isSubjectNameConflict(error) ? t('subjects.nameDuplicate') : t('subjects.updateFailed'),
+      )
     } finally {
       setUpdating(false)
     }
@@ -115,9 +126,8 @@ export function SubjectsPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <div className="status-panel">
-        <Typography.Title level={4}>{t('subjects.createTitle')}</Typography.Title>
+    <div className="dashboard-page subjects-page">
+      <Card className="page-card" title={t('subjects.createTitle')}>
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <div className="form-grid">
             <Form.Item
@@ -143,9 +153,9 @@ export function SubjectsPage() {
             {t('subjects.createTitle')}
           </Button>
         </Form>
-      </div>
+      </Card>
 
-      <div className="status-panel">
+      <Card className="page-card" styles={{ body: { paddingTop: 16 } }}>
         <div className="panel-heading">
           <Typography.Title level={4}>{t('subjects.listTitle')}</Typography.Title>
           <span className="panel-heading-spacer" />
@@ -153,26 +163,42 @@ export function SubjectsPage() {
         <div className="fixed-table-shell">
           <div className="fixed-table-body">
             <Table
+              tableLayout="fixed"
               rowKey="id"
               loading={loading}
               dataSource={subjects}
               pagination={false}
               columns={[
-                { title: t('subjects.name'), dataIndex: 'name' },
-                { title: t('subjects.description'), dataIndex: 'description' },
+                { title: t('subjects.name'), dataIndex: 'name', width: 220, ellipsis: true },
+                {
+                  title: t('subjects.description'),
+                  dataIndex: 'description',
+                  width: 420,
+                  render: (value?: string) => (
+                    <Typography.Paragraph
+                      className="subject-description-cell"
+                      ellipsis={{ rows: 2, tooltip: value || '-' }}
+                    >
+                      {value || '-'}
+                    </Typography.Paragraph>
+                  ),
+                },
                 {
                   title: t('subjects.visibility'),
                   dataIndex: 'visibility',
+                  width: 120,
                   render: (_, record) => renderVisibility(record.visibility),
                 },
                 {
                   title: t('subjects.createdAt'),
                   dataIndex: 'created_at',
+                  width: 180,
                   render: (_, record) => formatDateTime(record.created_at),
                 },
                 {
                   title: t('subjects.actions'),
                   key: 'actions',
+                  width: 96,
                   align: 'center',
                   render: (_, record) => (
                     <Space size={4}>
@@ -210,7 +236,7 @@ export function SubjectsPage() {
             onChange={(nextPage) => void loadSubjects(nextPage)}
           />
         </div>
-      </div>
+      </Card>
 
       <Modal
         title={t('subjects.updateTitle')}

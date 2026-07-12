@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"enterprise-rag/backend/internal/auth"
+	subjectpresenter "enterprise-rag/backend/internal/presenter/subject"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -46,6 +47,6 @@ func (l *SubjectDetailLogic) SubjectDetail(req *types.SubjectDetailReq) (resp *t
 	}
 
 	return &types.SubjectDetailResp{
-		Subject: toSubjectInfo(*subject),
+		Subject: subjectpresenter.ToInfo(*subject),
 	}, nil
 }

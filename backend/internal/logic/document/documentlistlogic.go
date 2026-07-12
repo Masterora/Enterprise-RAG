@@ -9,6 +9,8 @@ import (
 
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
+	documentpresenter "enterprise-rag/backend/internal/presenter/document"
+	"enterprise-rag/backend/internal/service/pagination"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -30,7 +32,7 @@ func NewDocumentListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Docu
 }
 
 func (l *DocumentListLogic) DocumentList(req *types.DocumentListReq) (resp *types.DocumentListResp, err error) {
-	_, pageSize, offset := normalizePage(req.Page, req.PageSize)
+	_, pageSize, offset := pagination.Normalize(req.Page, req.PageSize)
 	user, err := auth.CurrentUser(l.ctx)
 	if err != nil {
 		return nil, err
@@ -49,7 +51,7 @@ func (l *DocumentListLogic) DocumentList(req *types.DocumentListReq) (resp *type
 
 	list := make([]types.DocumentInfo, 0, len(documents))
 	for _, document := range documents {
-		list = append(list, toDocumentInfo(document))
+		list = append(list, documentpresenter.ToInfo(document))
 	}
 
 	return &types.DocumentListResp{

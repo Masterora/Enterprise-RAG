@@ -29,8 +29,18 @@ type DocumentMetadata struct {
 type DocumentParseLog struct {
 	ID        string
 	DocID     string
+	Filename  string
 	Status    string
 	Message   string
 	Error     string
 	CreatedAt time.Time
+}
+
+type ParseLogListFilter struct {
+	UserID    string
+	DocID     string
+	SubjectID string
+	Status    string
+	PageSize  int
+	Offset    int
 }

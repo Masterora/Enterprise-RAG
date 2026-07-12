@@ -1,6 +1,7 @@
 Name: rag-api
 Host: 0.0.0.0
 Port: 9999
+Timeout: 120000
 
 Postgres:
   DataSource: postgres://rag:rag@localhost:55432/rag?sslmode=disable
@@ -26,8 +27,20 @@ Milvus:
   Dimension: 1536
   MetricType: COSINE
   IndexType: HNSW
-  TopK: 5
+  TopK: 10
   MinScore: 0.65
+
+Worker:
+  ParseConcurrency: 4
+  ChunkConcurrency: 4
+  EmbeddingConcurrency: 2
+  DeleteConcurrency: 1
+
+Retrieval:
+  QueryRewrite: true
+  Rerank: true
+  CandidateMultiplier: 5
+  RewriteTimeoutSeconds: 6
 
 Auth:
   AccessSecret: enterprise-rag-dev-secret
@@ -35,7 +48,7 @@ Auth:
 
 LLM:
   Provider: openrouter
-  Model: openai/gpt-4o-mini
+  Model: openai/gpt-5.6-sol
   ApiKey: ${OPENROUTER_API_KEY}
   BaseURL: https://openrouter.ai/api/v1
 
@@ -45,3 +58,9 @@ Embedding:
   Dimension: 1536
   ApiKey: ${OPENROUTER_API_KEY}
   BaseURL: https://openrouter.ai/api/v1
+
+Prompt:
+  AnswerTemplate: ""
+  WebSearchTemplate: ""
+  OverviewPolishTemplate: ""
+  QueryRewriteTemplate: ""

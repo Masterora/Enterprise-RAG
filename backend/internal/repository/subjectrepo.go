@@ -2,9 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"enterprise-rag/backend/internal/model"
 )
+
+var ErrSubjectNameExists = errors.New("subject name already exists")
 
 type SubjectRepository interface {
 	Create(ctx context.Context, subject *model.Subject) error

@@ -9,6 +9,8 @@ import (
 
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
+	subjectpresenter "enterprise-rag/backend/internal/presenter/subject"
+	"enterprise-rag/backend/internal/service/pagination"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -30,7 +32,7 @@ func NewSubjectListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Subje
 }
 
 func (l *SubjectListLogic) SubjectList(req *types.SubjectListReq) (resp *types.SubjectListResp, err error) {
-	_, pageSize, offset := normalizePage(req.Page, req.PageSize)
+	_, pageSize, offset := pagination.Normalize(req.Page, req.PageSize)
 	user, err := auth.CurrentUser(l.ctx)
 	if err != nil {
 		return nil, err
@@ -47,7 +49,7 @@ func (l *SubjectListLogic) SubjectList(req *types.SubjectListReq) (resp *types.S
 
 	list := make([]types.SubjectInfo, 0, len(subjects))
 	for _, subject := range subjects {
-		list = append(list, toSubjectInfo(subject))
+		list = append(list, subjectpresenter.ToInfo(subject))
 	}
 
 	return &types.SubjectListResp{

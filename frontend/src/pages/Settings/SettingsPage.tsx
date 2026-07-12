@@ -1,4 +1,4 @@
-import { Button, Form, Input, Select, Typography, message } from 'antd'
+import { Button, Card, Form, Input, Select, Typography, message } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { getMe, updateUser, type UserInfo } from '../../api/auth'
 import { useI18n, type Language } from '../../useI18n'
@@ -66,8 +66,8 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <div className="status-panel">
+    <div className="dashboard-page settings-page">
+      <Card className="page-card">
         <Form form={form} layout="vertical" onFinish={handleSubmit} disabled={loading}>
           <Form.Item label={t('settings.username')}>
             <Typography.Text>{form.getFieldValue('username') || '-'}</Typography.Text>
@@ -104,7 +104,7 @@ export function SettingsPage() {
             {t('common.save')}
           </Button>
         </Form>
-      </div>
+      </Card>
     </div>
   )
 }

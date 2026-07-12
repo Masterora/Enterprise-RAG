@@ -1,4 +1,4 @@
-# Enterprise-RAG v1.0.0
+# Enterprise-RAG v2.0.0
 
 Enterprise-RAG 是一个企业知识库问答系统。
 
@@ -17,14 +17,14 @@ Enterprise-RAG 是一个企业知识库问答系统。
 
 - **管理界面**：用于登录系统、创建知识库、上传文档和发起问答
 - **文档处理模块**：负责解析上传的文件，并整理成可以检索的内容
-- **问答模块**：根据用户问题查找相关资料，生成答案并返回引用来源
+- **问答编排模块**：负责问题路由、检索改写、引用裁剪、答案生成和来源返回
 - **数据存储模块**：负责保存用户、知识库、文档和索引数据
 
 可以把它理解为一个“文档管理 + 智能检索 + 引用问答”的系统。
 
 ## 系统架构
 
-![系统框架图](./docs/system-architecture.svg)
+![系统架构](./docs/system-architecture.svg)
 
 ## 运行环境
 
@@ -51,7 +51,9 @@ docker compose up -d
 export OPENROUTER_API_KEY=你的密钥
 ```
 
-如需调整模型配置，可修改 [backend/etc/rag-api.yaml](/Users/ran/Project/Enterprise-RAG/backend/etc/rag-api.yaml)。
+当前默认对话模型为 `~openai/gpt-mini-latest`，前端内置了 OpenAI、Anthropic、Google、DeepSeek、Qwen、Moonshot 等常用模型选项。
+
+如需调整默认模型、检索改写模板或回答模板，可修改 [backend/etc/rag-api.yaml](/Users/ran/Project/Enterprise-RAG/backend/etc/rag-api.yaml)。
 
 ### 3. 启动后端服务
 
@@ -98,6 +100,16 @@ goctl api go -api backend/api/rag.api -dir backend
 4. 等待文档完成索引
 5. 进入问答页面，选择知识库并输入问题
 6. 查看系统生成的答案和对应引用来源
+
+## 问答模式
+
+当前问答链路支持以下几类模式：
+
+- **事实问答**：直接回答某个具体问题
+- **知识库概览**：总结知识库主要内容、用途和适用场景
+- **文档导航**：回答“哪篇文档讲了什么”“先看哪份资料”
+
+系统会先判断问题类型，再选择合适的处理方式，而不是所有问题都走同一种检索链路。
 
 ## 目录说明
 

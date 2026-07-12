@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"enterprise-rag/backend/internal/model"
+	"enterprise-rag/backend/internal/repository"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,6 +36,9 @@ func (r *SubjectRepo) Create(ctx context.Context, subject *model.Subject) error 
 		subject.Visibility,
 		subject.CreatedAt,
 	)
+	if isSubjectNameConflict(err) {
+		return repository.ErrSubjectNameExists
+	}
 	return err
 }
 
@@ -153,12 +158,22 @@ func (r *SubjectRepo) UpdateByOwner(ctx context.Context, subject *model.Subject)
 		subject.UpdatedAt,
 	)
 	if err != nil {
+		if isSubjectNameConflict(err) {
+			return repository.ErrSubjectNameExists
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrSubjectNotFound
 	}
 	return nil
+}
+
+func isSubjectNameConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "idx_subjects_owner_name_active"
 }
 
 func (r *SubjectRepo) SoftDeleteByOwner(ctx context.Context, subjectID, userID string) (bool, error) {

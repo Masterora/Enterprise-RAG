@@ -12,9 +12,12 @@ type Config struct {
 	NATS      NATSConf
 	MinIO     MinIOConf
 	Milvus    MilvusConf
+	Worker    WorkerConf
+	Retrieval RetrievalConf
 	Auth      AuthConf
 	LLM       ProviderConf
 	Embedding EmbeddingConf
+	Prompt    PromptConf
 }
 
 type PostgresConf struct {
@@ -49,6 +52,20 @@ type MilvusConf struct {
 	MinScore   float64
 }
 
+type WorkerConf struct {
+	ParseConcurrency     int
+	ChunkConcurrency     int
+	EmbeddingConcurrency int
+	DeleteConcurrency    int
+}
+
+type RetrievalConf struct {
+	QueryRewrite          bool
+	Rerank                bool
+	CandidateMultiplier   int
+	RewriteTimeoutSeconds int
+}
+
 type AuthConf struct {
 	AccessSecret string
 	ExpireHours  int
@@ -67,4 +84,11 @@ type EmbeddingConf struct {
 	Dimension int
 	ApiKey    string `json:",optional"`
 	BaseURL   string `json:",optional"`
+}
+
+type PromptConf struct {
+	AnswerTemplate         string `json:",optional"`
+	WebSearchTemplate      string `json:",optional"`
+	OverviewPolishTemplate string `json:",optional"`
+	QueryRewriteTemplate   string `json:",optional"`
 }

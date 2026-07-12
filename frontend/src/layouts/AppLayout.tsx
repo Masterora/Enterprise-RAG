@@ -1,10 +1,10 @@
 import {
   BookOutlined,
-  DashboardOutlined,
   FileTextOutlined,
   MessageOutlined,
   MoonOutlined,
   SettingOutlined,
+  ToolOutlined,
   SunOutlined,
 } from '@ant-design/icons'
 import { Button, Dropdown, Layout, Menu, Space, Typography, theme, type MenuProps } from 'antd'
@@ -49,9 +49,6 @@ export function AppLayout({ isDarkMode, onToggleTheme, onLogout }: AppLayoutProp
   const displayName = currentUser?.nickname || currentUser?.username || t('common.account')
 
   const pageMeta = useMemo(() => {
-    if (location.pathname === '/dashboard') {
-      return { title: t('dashboard.title'), subtitle: t('dashboard.subtitle') }
-    }
     if (location.pathname === '/subjects') {
       return { title: t('subjects.title'), subtitle: t('subjects.subtitle') }
     }
@@ -60,6 +57,9 @@ export function AppLayout({ isDarkMode, onToggleTheme, onLogout }: AppLayoutProp
     }
     if (location.pathname === '/chat') {
       return { title: t('chat.title'), subtitle: t('chat.subtitle') }
+    }
+    if (location.pathname === '/logs') {
+      return { title: t('logs.title'), subtitle: t('logs.subtitle') }
     }
     if (location.pathname === '/settings/profile') {
       return { title: t('settings.profile'), subtitle: t('settings.profileSubtitle') }
@@ -118,10 +118,10 @@ export function AppLayout({ isDarkMode, onToggleTheme, onLogout }: AppLayoutProp
           defaultOpenKeys={location.pathname.startsWith('/settings') ? ['settings-group'] : []}
           selectedKeys={[location.pathname]}
           items={[
-            { key: '/dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
+            { key: '/chat', icon: <MessageOutlined />, label: t('nav.chat') },
             { key: '/subjects', icon: <BookOutlined />, label: t('nav.subjects') },
             { key: '/documents', icon: <FileTextOutlined />, label: t('nav.documents') },
-            { key: '/chat', icon: <MessageOutlined />, label: t('nav.chat') },
+            { key: '/logs', icon: <ToolOutlined />, label: t('nav.logs') },
             {
               key: 'settings-group',
               icon: <SettingOutlined />,

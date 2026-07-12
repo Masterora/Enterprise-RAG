@@ -14,14 +14,12 @@ type Embedder interface {
 
 func NewEmbedder(c config.EmbeddingConf) (Embedder, error) {
 	switch strings.ToLower(strings.TrimSpace(c.Provider)) {
-	case "openai":
-		return NewOpenAIClient(c.ApiKey, c.Model), nil
 	case "qwen":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1"), c.Dimension), nil
+		return NewCompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1"), c.Dimension), nil
 	case "openrouter":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://openrouter.ai/api/v1"), c.Dimension), nil
-	case "openai_compatible":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, c.BaseURL, c.Dimension), nil
+		return NewCompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://openrouter.ai/api/v1"), c.Dimension), nil
+	case "compatible":
+		return NewCompatibleClient(c.ApiKey, c.Model, c.BaseURL, c.Dimension), nil
 	case "mock":
 		return NewMockEmbedder(c.Dimension), nil
 	default:

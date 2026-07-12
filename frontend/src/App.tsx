@@ -1,9 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
-import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { ChatPage } from './pages/Chat/ChatPage'
 import { DocumentsPage } from './pages/Documents/DocumentsPage'
 import { LoginPage } from './pages/Login/LoginPage'
+import { RuntimeLogsPage } from './pages/RuntimeLogs/RuntimeLogsPage'
 import { SettingsPasswordPage } from './pages/Settings/SettingsPasswordPage'
 import { SettingsPage } from './pages/Settings/SettingsPage'
 import { SubjectsPage } from './pages/Subjects/SubjectsPage'
@@ -24,7 +24,7 @@ export default function App({ authToken, onAuthChange, isDarkMode, onToggleTheme
         path="/login"
         element={
           isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
+            <Navigate to="/chat" replace />
           ) : (
             <LoginPage
               isDarkMode={isDarkMode}
@@ -44,10 +44,6 @@ export default function App({ authToken, onAuthChange, isDarkMode, onToggleTheme
         }
       >
         <Route
-          path="/dashboard"
-          element={isAuthenticated ? <DashboardPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
           path="/subjects"
           element={isAuthenticated ? <SubjectsPage /> : <Navigate to="/login" replace />}
         />
@@ -58,6 +54,10 @@ export default function App({ authToken, onAuthChange, isDarkMode, onToggleTheme
         <Route
           path="/chat"
           element={isAuthenticated ? <ChatPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/logs"
+          element={isAuthenticated ? <RuntimeLogsPage /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/settings/profile"
@@ -72,7 +72,7 @@ export default function App({ authToken, onAuthChange, isDarkMode, onToggleTheme
           element={<Navigate to={isAuthenticated ? '/settings/profile' : '/login'} replace />}
         />
       </Route>
-      <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={isAuthenticated ? '/chat' : '/login'} replace />} />
     </Routes>
   )
 }

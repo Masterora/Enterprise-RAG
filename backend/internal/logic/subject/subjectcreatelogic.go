@@ -11,6 +11,9 @@ import (
 
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
+	subjectpresenter "enterprise-rag/backend/internal/presenter/subject"
+	"enterprise-rag/backend/internal/repository"
+	"enterprise-rag/backend/internal/service/subjectmeta"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -40,7 +43,7 @@ func (l *SubjectCreateLogic) SubjectCreate(req *types.SubjectCreateReq) (resp *t
 
 	id := uuid.NewString()
 	now := time.Now()
-	visibility := normalizeVisibility(req.Visibility)
+	visibility := subjectmeta.NormalizeVisibility(req.Visibility)
 	user, err := auth.CurrentUser(l.ctx)
 	if err != nil {
 		return nil, err
@@ -56,10 +59,13 @@ func (l *SubjectCreateLogic) SubjectCreate(req *types.SubjectCreateReq) (resp *t
 		UpdatedAt:   now,
 	}
 	if err := l.svcCtx.SubjectRepo.Create(l.ctx, subject); err != nil {
+		if errors.Is(err, repository.ErrSubjectNameExists) {
+			return nil, errors.New("knowledge base name already exists")
+		}
 		return nil, err
 	}
 
 	return &types.SubjectCreateResp{
-		Subject: toSubjectInfo(*subject),
+		Subject: subjectpresenter.ToInfo(*subject),
 	}, nil
 }

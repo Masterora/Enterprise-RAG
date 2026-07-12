@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { apiClient } from './client'
 
 export interface SubjectInfo {
@@ -40,4 +41,11 @@ export async function listSubjects(payload: {
 } = {}) {
   const response = await apiClient.post<{ list: SubjectInfo[]; total: number }>('/subjects/list', payload)
   return response.data
+}
+
+export function isSubjectNameConflict(error: unknown) {
+  return (
+    axios.isAxiosError(error) &&
+    error.response?.data?.message === 'knowledge base name already exists'
+  )
 }

@@ -3,9 +3,64 @@
 
 package types
 
+type AdminLogListReq struct {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type AdminLogListResp struct {
+	List  []ParseLogInfo `json:"list"`
+	Total int64          `json:"total"`
+}
+
+type AdminLogClearReq struct {
+	SubjectID string `json:"subject_id,optional"`
+}
+
+type AdminLogClearResp struct {
+	Cleared int64 `json:"cleared"`
+}
+
+type AdminSummaryResp struct {
+	SubjectTotal     int64 `json:"subject_total"`
+	DocumentTotal    int64 `json:"document_total"`
+	ChunkTotal       int64 `json:"chunk_total"`
+	SessionTotal     int64 `json:"session_total"`
+	IndexedTotal     int64 `json:"indexed_total"`
+	ProcessingTotal  int64 `json:"processing_total"`
+	FailedTotal      int64 `json:"failed_total"`
+	PendingTaskTotal int64 `json:"pending_task_total"`
+	RunningTaskTotal int64 `json:"running_task_total"`
+	FailedTaskTotal  int64 `json:"failed_task_total"`
+}
+
+type AdminTaskClearResp struct {
+	Cleared int64 `json:"cleared"`
+}
+
+type AdminTaskListReq struct {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	TaskType  string `json:"task_type,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type AdminTaskListResp struct {
+	List  []IndexTaskInfo `json:"list"`
+	Total int64           `json:"total"`
+}
+
 type AuthLoginReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type AuthLoginResp struct {
+	Token string   `json:"token"`
+	User  UserInfo `json:"user"`
 }
 
 type AuthRegisterReq struct {
@@ -16,21 +71,133 @@ type AuthRegisterReq struct {
 	Email           string `json:"email,optional"`
 }
 
-type AuthLoginResp struct {
-	Token string   `json:"token"`
-	User  UserInfo `json:"user"`
+type ChatAskReq struct {
+	SessionID        string   `json:"session_id,optional"`
+	MessageID        string   `json:"message_id,optional"`
+	SubjectID        string   `json:"subject_id"`
+	Query            string   `json:"query"`
+	TopK             int      `json:"top_k,optional"`
+	LlmProvider      string   `json:"llm_provider,optional"`
+	LlmModel         string   `json:"llm_model,optional"`
+	WebSearch        bool     `json:"web_search,optional"`
+	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
+	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+}
+
+type ChatAskResp struct {
+	Answer        string           `json:"answer"`
+	Chunks        []RetrievalChunk `json:"chunks"`
+	ExternalLinks []ExternalLink   `json:"external_links"`
+	Metrics       RetrievalMetrics `json:"metrics"`
+}
+
+type ChatMessageInfo struct {
+	ID            string           `json:"id"`
+	Question      string           `json:"question"`
+	Answer        string           `json:"answer"`
+	Chunks        []RetrievalChunk `json:"chunks"`
+	ExternalLinks []ExternalLink   `json:"external_links"`
+	Metrics       RetrievalMetrics `json:"metrics"`
+	ModelLabel    string           `json:"model_label"`
+	ModelID       string           `json:"model_id"`
+	WebSearch     bool             `json:"web_search"`
+	CreatedAt     string           `json:"created_at"`
+}
+
+type ChatSessionCreateReq struct {
+	ID          string `json:"id"`
+	SubjectID   string `json:"subject_id,optional"`
+	Title       string `json:"title"`
+	LlmProvider string `json:"llm_provider,optional"`
+	LlmModel    string `json:"llm_model,optional"`
+}
+
+type ChatSessionCreateResp struct {
+	Session ChatSessionInfo `json:"session"`
+}
+
+type ChatSessionDeleteReq struct {
+	ID string `json:"id"`
+}
+
+type ChatSessionDeleteResp struct {
+	Deleted bool `json:"deleted"`
+}
+
+type ChatSessionInfo struct {
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	SubjectID   string            `json:"subject_id"`
+	LlmProvider string            `json:"llm_provider"`
+	LlmModel    string            `json:"llm_model"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+	Messages    []ChatMessageInfo `json:"messages"`
+}
+
+type ChatSessionListResp struct {
+	List []ChatSessionInfo `json:"list"`
+}
+
+type ChatSessionUpdateReq struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type ChatSessionUpdateResp struct {
+	Updated bool `json:"updated"`
+}
+
+type DocumentChunkInfo struct {
+	ID         string `json:"id"`
+	ChunkIndex int    `json:"chunk_index"`
+	Page       int    `json:"page"`
+	Section    string `json:"section"`
+	Content    string `json:"content"`
+	TokenCount int    `json:"token_count"`
+}
+
+type DocumentClearFailedResp struct {
+	Deleted int64 `json:"deleted"`
+}
+
+type DocumentDeleteReq struct {
+	ID string `json:"id"`
+}
+
+type DocumentDeleteResp struct {
+	Task IndexTaskInfo `json:"task"`
+}
+
+type DocumentDetailReq struct {
+	ID string `json:"id"`
+}
+
+type DocumentDetailResp struct {
+	Document DocumentInfo        `json:"document"`
+	Chunks   []DocumentChunkInfo `json:"chunks"`
+	Tasks    []IndexTaskInfo     `json:"tasks"`
+	Logs     []ParseLogInfo      `json:"logs"`
 }
 
 type DocumentInfo struct {
-	ID        string `json:"id"`
-	SubjectID string `json:"subject_id"`
-	Filename  string `json:"filename"`
-	FileType  string `json:"file_type"`
-	FileSize  int64  `json:"file_size"`
-	FileURL   string `json:"file_url"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID           string `json:"id"`
+	SubjectID    string `json:"subject_id"`
+	Filename     string `json:"filename"`
+	FileType     string `json:"file_type"`
+	FileSize     int64  `json:"file_size"`
+	FileURL      string `json:"file_url"`
+	Status       string `json:"status"`
+	ErrorMessage string `json:"error_message"`
+	Progress     int    `json:"progress"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type ExternalLink struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
 }
 
 type DocumentListReq struct {
@@ -46,12 +213,39 @@ type DocumentListResp struct {
 	Total int64          `json:"total"`
 }
 
-type DocumentClearFailedResp struct {
-	Deleted int64 `json:"deleted"`
-}
-
 type DocumentUploadResp struct {
 	Document DocumentInfo `json:"document"`
+}
+
+type IndexTaskInfo struct {
+	ID           string `json:"id"`
+	DocID        string `json:"doc_id"`
+	SubjectID    string `json:"subject_id"`
+	Filename     string `json:"filename"`
+	TaskType     string `json:"task_type"`
+	Status       string `json:"status"`
+	RetryCount   int    `json:"retry_count"`
+	ErrorMessage string `json:"error_message"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type IndexTaskRetryReq struct {
+	ID string `json:"id"`
+}
+
+type IndexTaskRetryResp struct {
+	Task IndexTaskInfo `json:"task"`
+}
+
+type ParseLogInfo struct {
+	ID           string `json:"id"`
+	DocID        string `json:"doc_id"`
+	Filename     string `json:"filename"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+	ErrorMessage string `json:"error_message"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type RetrievalChunk struct {
@@ -69,25 +263,30 @@ type RetrievalChunk struct {
 	Source     string  `json:"source"`
 }
 
+type RetrievalMetrics struct {
+	OriginalQuery  string  `json:"original_query"`
+	SearchQuery    string  `json:"search_query"`
+	QueryRewritten bool    `json:"query_rewritten"`
+	Reranked       bool    `json:"reranked"`
+	TopK           int     `json:"top_k"`
+	CandidateCount int     `json:"candidate_count"`
+	ReturnedCount  int     `json:"returned_count"`
+	ExpectedCount  int     `json:"expected_count"`
+	RecallHitCount int     `json:"recall_hit_count"`
+	RecallAtK      float64 `json:"recall_at_k"`
+}
+
 type RetrievalSearchReq struct {
-	SubjectID string `json:"subject_id"`
-	Query     string `json:"query"`
-	TopK      int    `json:"top_k,optional"`
+	SubjectID        string   `json:"subject_id"`
+	Query            string   `json:"query"`
+	TopK             int      `json:"top_k,optional"`
+	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
+	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
 }
 
 type RetrievalSearchResp struct {
-	List []RetrievalChunk `json:"list"`
-}
-
-type ChatAskReq struct {
-	SubjectID string `json:"subject_id"`
-	Query     string `json:"query"`
-	TopK      int    `json:"top_k,optional"`
-}
-
-type ChatAskResp struct {
-	Answer string           `json:"answer"`
-	Chunks []RetrievalChunk `json:"chunks"`
+	List    []RetrievalChunk `json:"list"`
+	Metrics RetrievalMetrics `json:"metrics"`
 }
 
 type SubjectCreateReq struct {
@@ -155,6 +354,10 @@ type UserInfo struct {
 	Language string `json:"language"`
 }
 
+type UserMeResp struct {
+	User UserInfo `json:"user"`
+}
+
 type UserPasswordUpdateReq struct {
 	OldPassword     string `json:"old_password"`
 	NewPassword     string `json:"new_password"`
@@ -162,10 +365,6 @@ type UserPasswordUpdateReq struct {
 }
 
 type UserPasswordUpdateResp struct {
-}
-
-type UserMeResp struct {
-	User UserInfo `json:"user"`
 }
 
 type UserUpdateReq struct {

@@ -6,6 +6,8 @@ package chat
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
+	"time"
 
 	chatlogic "enterprise-rag/backend/internal/logic/chat"
 	"enterprise-rag/backend/internal/svc"
@@ -32,7 +34,11 @@ func ChatStreamHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
 
+		var writeMu sync.Mutex
 		writeEvent := func(event string, payload any) error {
+			writeMu.Lock()
+			defer writeMu.Unlock()
+
 			body, err := json.Marshal(payload)
 			if err != nil {
 				return err
@@ -47,13 +53,36 @@ func ChatStreamHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return nil
 		}
 
-		l := chatlogic.NewChatAskLogic(r.Context(), svcCtx)
+		done := make(chan struct{})
+		defer close(done)
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-done:
+					return
+				case <-ticker.C:
+					_ = writeEvent("heartbeat", map[string]bool{"ok": true})
+				}
+			}
+		}()
+
+		l := chatlogic.NewChatStreamLogic(r.Context(), svcCtx)
 		err := l.ChatStream(&req, chatlogic.StreamCallbacks{
 			OnStatus: func(message string) error {
 				return writeEvent("status", map[string]string{"message": message})
 			},
 			OnSources: func(chunks []types.RetrievalChunk) error {
 				return writeEvent("sources", map[string][]types.RetrievalChunk{"chunks": chunks})
+			},
+			OnWebSources: func(links []types.ExternalLink) error {
+				return writeEvent("web_sources", map[string][]types.ExternalLink{"links": links})
+			},
+			OnMetrics: func(metrics types.RetrievalMetrics) error {
+				return writeEvent("metrics", metrics)
 			},
 			OnDelta: func(content string) error {
 				return writeEvent("delta", map[string]string{"content": content})

@@ -42,10 +42,14 @@ func (l *RetrievalSearchLogic) RetrievalSearch(req *types.RetrievalSearchReq) (r
 		return nil, err
 	}
 
-	list, err := retrievalsvc.NewService(l.svcCtx).Search(l.ctx, user.ID, subjectID, query, req.TopK)
+	list, metrics, err := retrievalsvc.NewService(l.svcCtx).SearchWithOptions(l.ctx, user.ID, subjectID, query, retrievalsvc.SearchOptions{
+		TopK:             req.TopK,
+		ExpectedDocIDs:   req.ExpectedDocIDs,
+		ExpectedChunkIDs: req.ExpectedChunkIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.RetrievalSearchResp{List: list}, nil
+	return &types.RetrievalSearchResp{List: list, Metrics: metrics}, nil
 }

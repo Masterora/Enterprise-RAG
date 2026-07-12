@@ -15,6 +15,9 @@ import (
 
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
+	documentpresenter "enterprise-rag/backend/internal/presenter/document"
+	"enterprise-rag/backend/internal/service/documentupload"
+	"enterprise-rag/backend/internal/service/taskqueue"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/task"
 	"enterprise-rag/backend/internal/types"
@@ -39,11 +42,13 @@ func NewDocumentUploadLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Do
 }
 
 func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.DocumentUploadResp, err error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	input, err := documentupload.ParseRequest(r)
+	if err != nil {
 		return nil, err
 	}
+	defer input.File.Close()
 
-	subjectID := strings.TrimSpace(r.FormValue("subject_id"))
+	subjectID := strings.TrimSpace(input.SubjectID)
 	if subjectID == "" {
 		return nil, errors.New("subject_id is required")
 	}
@@ -61,31 +66,33 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		return nil, errors.New("knowledge base not found")
 	}
 
-	file, header, err := r.FormFile("file")
+	docID := uuid.NewString()
+	filename := filepath.Base(input.Filename)
+	if filename == "." || filename == string(filepath.Separator) {
+		return nil, errors.New("filename is invalid")
+	}
+	duplicate, err := l.svcCtx.DocumentRepo.ExistsActiveFilename(l.ctx, user.ID, subjectID, filename)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-
-	docID := uuid.NewString()
-	filename := filepath.Base(header.Filename)
-	if filename == "." || filename == string(filepath.Separator) {
-		return nil, errors.New("filename is invalid")
+	if duplicate {
+		return nil, errors.New("document filename already exists")
 	}
 
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
 	if ext == "" {
 		ext = "unknown"
 	}
+	processingMode := task.NormalizeProcessingMode(input.ProcessingMode)
 
 	objectName := fmt.Sprintf("documents/%s/%s", docID, filename)
 	_, err = l.svcCtx.MinIO.PutObject(
 		l.ctx,
 		l.svcCtx.Config.MinIO.Bucket,
 		objectName,
-		file,
-		header.Size,
-		minio.PutObjectOptions{ContentType: header.Header.Get("Content-Type")},
+		input.File,
+		input.FileSize,
+		minio.PutObjectOptions{ContentType: input.ContentType},
 	)
 	if err != nil {
 		return nil, err
@@ -99,7 +106,7 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		UserID:    user.ID,
 		Filename:  filename,
 		FileType:  ext,
-		FileSize:  header.Size,
+		FileSize:  input.FileSize,
 		FileURL:   fileURL,
 		Status:    model.DocumentStatusUploaded,
 		CreatedAt: now,
@@ -115,19 +122,21 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	indexTask.Metadata, err = json.Marshal(task.ParseTaskMetadata{ProcessingMode: processingMode})
+	if err != nil {
+		return nil, err
+	}
 	if err := l.svcCtx.DocumentRepo.CreateWithIndexTask(l.ctx, documentModel, indexTask); err != nil {
 		return nil, err
 	}
 
-	payload, err := json.Marshal(task.Message{DocID: docID})
-	if err != nil {
-		return nil, err
-	}
-	if err := l.svcCtx.Nats.Publish(model.TaskTypeParse, payload); err != nil {
+	if err := taskqueue.Publish(l.svcCtx.Nats, model.TaskTypeParse, indexTask.ID, docID, processingMode); err != nil {
+		_ = l.svcCtx.IndexTaskRepo.UpdateStatus(l.ctx, indexTask.ID, model.TaskStatusFailed, err.Error())
+		_ = l.svcCtx.DocumentRepo.UpdateStatus(l.ctx, docID, model.DocumentStatusFailed, err.Error())
 		return nil, err
 	}
 
 	return &types.DocumentUploadResp{
-		Document: toDocumentInfo(*documentModel),
+		Document: documentpresenter.ToInfo(*documentModel),
 	}, nil
 }

@@ -1,4 +1,4 @@
-import { Button, Form, Input, message } from 'antd'
+import { Button, Card, Form, Input, message } from 'antd'
 import axios from 'axios'
 import { updatePassword } from '../../api/auth'
 import { useI18n } from '../../useI18n'
@@ -31,8 +31,8 @@ export function SettingsPasswordPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <div className="status-panel">
+    <div className="dashboard-page settings-page">
+      <Card className="page-card">
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             label={t('settings.password.old')}
@@ -70,7 +70,7 @@ export function SettingsPasswordPage() {
             {t('common.save')}
           </Button>
         </Form>
-      </div>
+      </Card>
     </div>
   )
 }

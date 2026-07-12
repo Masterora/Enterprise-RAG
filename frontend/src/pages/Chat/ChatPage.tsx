@@ -1,30 +1,98 @@
-import { Button, Input, Select, message } from 'antd'
-import { SendOutlined } from '@ant-design/icons'
+import { Button, message } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type UIEvent } from 'react'
-import { streamChat } from '../../api/chat'
+import {
+  createChatSession,
+  deleteChatSession,
+  listChatSessions,
+  updateChatSession,
+  type StoredChatSession,
+} from '../../api/chat'
 import { listSubjects, type SubjectInfo } from '../../api/subjects'
 import { useI18n } from '../../useI18n'
 import { ConversationTurn } from './components/ConversationTurn'
+import { ChatComposer } from './components/ChatComposer'
+import { ChatEmptyState } from './components/ChatEmptyState'
+import {
+  buildChatModelValue,
+  CHAT_MODEL_OPTIONS,
+  DEFAULT_CHAT_MODEL,
+  getBestVendorModel,
+  getVendorModelCascaderOptions,
+  getVendorOptions,
+  parseChatModelValue,
+} from './models'
 import { SessionList } from './components/SessionList'
+import { RetrievalEvaluationModal } from './components/RetrievalEvaluationModal'
+import { useSubjectOverview } from './hooks/useSubjectOverview'
+import { askWithRetry as streamAskWithRetry, classifyChatFailure } from './streaming'
 import type { ChatMessage, ChatSession } from './types'
-import { buildSessionTitle, CHAT_STORAGE_KEY, loadStoredSessions } from './utils'
+import { buildSessionTitle } from './utils'
+import './chat.css'
 
 const MAX_ASK_ATTEMPTS = 3
 const ASK_TIMEOUT_MS = 30_000
 const DEFAULT_CHAT_TOP_K = 5
 const CHAT_TOP_K = Math.max(1, Number(import.meta.env.VITE_CHAT_TOP_K ?? DEFAULT_CHAT_TOP_K))
 
+type SelectedLLM = {
+  provider: string
+  model: string
+}
+
+function mapStoredSession(session: StoredChatSession, doneStatus: string, webSearchStatus: string): ChatSession {
+  return {
+    id: session.id,
+    title: session.title,
+    subjectID: session.subject_id,
+    llmProvider: session.llm_provider || DEFAULT_CHAT_MODEL.provider,
+    llmModel: session.llm_model || DEFAULT_CHAT_MODEL.model,
+    createdAt: Date.parse(session.created_at),
+    updatedAt: Date.parse(session.updated_at),
+    messages: session.messages.map((item) => ({
+      id: item.id,
+      question: item.question,
+      answer: item.answer,
+      status: doneStatus,
+      chunks: item.chunks ?? [],
+      externalLinks: item.external_links ?? [],
+      metrics: item.metrics,
+      modelLabel: item.model_label || item.model_id,
+      modelID: item.model_id,
+      webSearch: item.web_search,
+      processSteps: item.web_search ? [webSearchStatus] : [],
+      startedAt: Date.parse(item.created_at),
+      finishedAt: Date.parse(item.created_at),
+      loading: false,
+    })),
+  }
+}
+
 export function ChatPage() {
   const [subjects, setSubjects] = useState<SubjectInfo[]>([])
+  const [subjectsLoaded, setSubjectsLoaded] = useState(false)
   const [subjectID, setSubjectID] = useState('')
   const [question, setQuestion] = useState('')
-  const [sessions, setSessions] = useState<ChatSession[]>(() => loadStoredSessions())
+  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSessionID, setActiveSessionID] = useState('')
   const [editingSessionID, setEditingSessionID] = useState('')
   const [editingTitle, setEditingTitle] = useState('')
   const [asking, setAsking] = useState(false)
+  const [subjectSelectOpen, setSubjectSelectOpen] = useState(false)
+  const [modelSelectOpen, setModelSelectOpen] = useState(false)
+  const [vendorSelectOpen, setVendorSelectOpen] = useState(false)
+  const [expandedSeriesKey, setExpandedSeriesKey] = useState('')
+  const [expandedSeriesIndex, setExpandedSeriesIndex] = useState(-1)
+  const [evaluationOpen, setEvaluationOpen] = useState(false)
+  const [webSearch, setWebSearch] = useState(false)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+  const [selectedLLM, setSelectedLLM] = useState<SelectedLLM>({
+    provider: DEFAULT_CHAT_MODEL.provider,
+    model: DEFAULT_CHAT_MODEL.model,
+  })
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
   const autoFollowRef = useRef(true)
+  const selectedLLMRef = useRef(selectedLLM)
   const { t } = useI18n()
 
   const orderedSessions = useMemo(() => [...sessions].sort((a, b) => b.updatedAt - a.updatedAt), [sessions])
@@ -36,11 +104,44 @@ export function ChatPage() {
     () => subjects.map((subject) => ({ label: subject.name, value: subject.id })),
     [subjects],
   )
+  const activeModelOption = useMemo(
+    () =>
+      CHAT_MODEL_OPTIONS.find(
+        (option) =>
+          option.provider === selectedLLM.provider &&
+          option.model === selectedLLM.model,
+      ) || DEFAULT_CHAT_MODEL,
+    [selectedLLM.model, selectedLLM.provider],
+  )
+  const vendorOptions = useMemo(() => getVendorOptions(), [])
+  const modelOptions = useMemo(
+    () => getVendorModelCascaderOptions(activeModelOption.vendor),
+    [activeModelOption.vendor],
+  )
+  const expandedSeries = useMemo(
+    () => modelOptions.find((option) => option.value === expandedSeriesKey),
+    [expandedSeriesKey, modelOptions],
+  )
   const messages = activeSession?.messages ?? []
+  const { subjectOverview, subjectOverviewLoading } = useSubjectOverview(subjectID)
 
   useEffect(() => {
-    window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(sessions))
-  }, [sessions])
+    async function loadSessions() {
+      try {
+        const stored = await listChatSessions()
+        setSessions(stored.map((session) =>
+          mapStoredSession(session, t('chat.done'), t('chat.process.webSearchEnabled')),
+        ))
+      } catch {
+        message.error(t('chat.loadSessionsFailed'))
+      }
+    }
+    void loadSessions()
+  }, [t])
+
+  useEffect(() => {
+    selectedLLMRef.current = selectedLLM
+  }, [selectedLLM])
 
   useEffect(() => {
     async function loadSubjects() {
@@ -49,6 +150,8 @@ export function ChatPage() {
         setSubjects(data.list)
       } catch {
         message.error(t('chat.loadSubjectsFailed'))
+      } finally {
+        setSubjectsLoaded(true)
       }
     }
 
@@ -63,25 +166,51 @@ export function ChatPage() {
   }, [activeSessionID, sessions])
 
   useEffect(() => {
+    if (!subjectsLoaded) {
+      return
+    }
+
     if (subjects.length === 0) {
       setSubjectID('')
-      return
-    }
-    if (activeSession?.subjectID) {
-      setSubjectID(activeSession.subjectID)
-      return
-    }
-    setSubjectID((current) => {
-      if (current && subjects.some((subject) => subject.id === current)) {
-        return current
+      if (activeSession?.subjectID) {
+        updateSession(activeSession.id, (session) => ({ ...session, subjectID: '' }))
       }
-      return subjects[0].id
-    })
-  }, [activeSession?.subjectID, subjects])
+      return
+    }
+
+    const hasSubject = (value: string) => subjects.some((subject) => subject.id === value)
+
+    if (activeSession?.subjectID) {
+      if (hasSubject(activeSession.subjectID)) {
+        setSubjectID(activeSession.subjectID)
+      } else {
+        setSubjectID('')
+        updateSession(activeSession.id, (session) => ({ ...session, subjectID: '' }))
+      }
+      return
+    }
+
+    setSubjectID((current) => (current && hasSubject(current) ? current : subjects[0].id))
+  }, [activeSession?.id, activeSession?.subjectID, subjects, subjectsLoaded])
 
   useEffect(() => {
     autoFollowRef.current = true
+    setShowScrollToBottom(false)
   }, [activeSessionID])
+
+  useEffect(() => {
+    if (!activeSession) {
+      setSelectedLLM({
+        provider: DEFAULT_CHAT_MODEL.provider,
+        model: DEFAULT_CHAT_MODEL.model,
+      })
+      return
+    }
+    setSelectedLLM({
+      provider: activeSession.llmProvider || DEFAULT_CHAT_MODEL.provider,
+      model: activeSession.llmModel || DEFAULT_CHAT_MODEL.model,
+    })
+  }, [activeSession])
 
   useEffect(() => {
     if (!chatScrollRef.current || !autoFollowRef.current) {
@@ -97,23 +226,33 @@ export function ChatPage() {
     setSessions((current) => current.map((session) => (session.id === sessionID ? updater(session) : session)))
   }
 
-  function createSession(nextSubjectID?: string) {
+  async function createSession(nextSubjectID?: string) {
     const timestamp = Date.now()
+    const currentLLM = selectedLLMRef.current
     const session: ChatSession = {
       id: crypto.randomUUID(),
       title: t('chat.newSession'),
       subjectID: nextSubjectID ?? subjectID,
+      llmProvider: currentLLM.provider,
+      llmModel: currentLLM.model,
       createdAt: timestamp,
       updatedAt: timestamp,
       messages: [],
     }
+    await createChatSession({
+      id: session.id,
+      subject_id: session.subjectID,
+      title: session.title,
+      llm_provider: session.llmProvider,
+      llm_model: session.llmModel,
+    })
     setSessions((current) => [session, ...current])
     setActiveSessionID(session.id)
     setSubjectID(session.subjectID)
     return session
   }
 
-  function ensureActiveSession() {
+  async function ensureActiveSession() {
     return activeSession ?? createSession(subjectID)
   }
 
@@ -122,8 +261,9 @@ export function ChatPage() {
     setEditingTitle(session.title)
   }
 
-  function confirmRenameSession(sessionID: string) {
+  async function confirmRenameSession(sessionID: string) {
     const nextTitle = editingTitle.trim()
+    await updateChatSession({ id: sessionID, title: nextTitle })
     updateSession(sessionID, (session) => ({
       ...session,
       title: nextTitle,
@@ -138,7 +278,8 @@ export function ChatPage() {
     setEditingTitle('')
   }
 
-  function deleteSession(sessionID: string) {
+  async function deleteSession(sessionID: string) {
+    await deleteChatSession(sessionID)
     const nextSessions = orderedSessions.filter((session) => session.id !== sessionID)
     setSessions((current) => current.filter((session) => session.id !== sessionID))
     if (activeSessionID === sessionID) {
@@ -169,7 +310,38 @@ export function ChatPage() {
     }))
   }
 
+  function appendProcessStep(sessionID: string, messageID: string, step: string) {
+    const nextStep = step.trim()
+    if (!nextStep) {
+      return
+    }
+    updateSession(sessionID, (session) => ({
+      ...session,
+      updatedAt: Date.now(),
+      messages: session.messages.map((item) => {
+        if (item.id !== messageID) {
+          return item
+        }
+        const currentSteps = item.processSteps ?? []
+        if (currentSteps[currentSteps.length - 1] === nextStep) {
+          return item
+        }
+        return { ...item, processSteps: [...currentSteps, nextStep] }
+      }),
+    }))
+  }
+
+  function closeComposerPopups() {
+    setSubjectSelectOpen(false)
+    setModelSelectOpen(false)
+    setVendorSelectOpen(false)
+    setExpandedSeriesKey('')
+    setExpandedSeriesIndex(-1)
+  }
+
   async function handleAsk() {
+    closeComposerPopups()
+
     const trimmedQuestion = question.trim()
     if (!subjectID) {
       message.warning(t('chat.selectSubjectWarning'))
@@ -180,9 +352,28 @@ export function ChatPage() {
       return
     }
 
-    const session = ensureActiveSession()
+    let session: ChatSession
+    try {
+      session = await ensureActiveSession()
+    } catch {
+      message.error(t('chat.createSessionFailed'))
+      return
+    }
+    const currentLLM = selectedLLMRef.current
+    const currentModelOption =
+      CHAT_MODEL_OPTIONS.find((option) => option.provider === currentLLM.provider && option.model === currentLLM.model) ??
+      DEFAULT_CHAT_MODEL
     const messageID = crypto.randomUUID()
     const nextTimestamp = Date.now()
+    if (session.messages.length === 0) {
+      const title = buildSessionTitle(trimmedQuestion)
+      try {
+        await updateChatSession({ id: session.id, title })
+      } catch {
+        message.error(t('chat.renameFailed'))
+        return
+      }
+    }
     setQuestion('')
     setAsking(true)
 
@@ -190,6 +381,8 @@ export function ChatPage() {
       ...current,
       title: current.messages.length === 0 ? buildSessionTitle(trimmedQuestion) : current.title,
       subjectID,
+      llmProvider: currentLLM.provider,
+      llmModel: currentLLM.model,
       updatedAt: nextTimestamp,
       messages: [
         ...current.messages,
@@ -197,105 +390,93 @@ export function ChatPage() {
           id: messageID,
           question: trimmedQuestion,
           answer: '',
+          errorReason: '',
           status: t('chat.preparing'),
           chunks: [],
+          externalLinks: [],
+          modelLabel: currentModelOption.label,
+          modelID: currentModelOption.model,
+          webSearch,
+          processSteps: [
+            t('chat.process.model', { model: currentModelOption.label }),
+            ...(webSearch ? [t('chat.process.webSearchEnabled')] : []),
+            t('chat.process.questionSubmitted'),
+          ],
+          startedAt: nextTimestamp,
           loading: true,
         },
       ],
     }))
 
     try {
-      await askWithRetry(session.id, messageID, trimmedQuestion, subjectID)
-    } catch {
+      await askWithRetry(
+        session.id,
+        messageID,
+        trimmedQuestion,
+        subjectID,
+        currentLLM.provider,
+        currentLLM.model,
+        webSearch,
+      )
+    } catch (error) {
+      const failure = classifyChatFailure(error)
       updateMessage(session.id, messageID, {
-        status: t('chat.failed'),
+        status: failure.status,
+        errorReason: failure.detail,
+        finishedAt: Date.now(),
         loading: false,
       })
-      message.error(t('chat.failedToast'))
+      appendProcessStep(session.id, messageID, failure.detail)
+      message.error(failure.toast)
     } finally {
       setAsking(false)
     }
   }
 
-  async function askWithRetry(sessionID: string, messageID: string, currentQuestion: string, currentSubjectID: string) {
-    let lastError: unknown
-
-    for (let attempt = 1; attempt <= MAX_ASK_ATTEMPTS; attempt += 1) {
-      const controller = new AbortController()
-      let hasAnswer = false
-      let timeout = window.setTimeout(() => controller.abort(), ASK_TIMEOUT_MS)
-      let settleTimeout = 0
-      const resetTimeout = () => {
-        window.clearTimeout(timeout)
-        timeout = window.setTimeout(() => controller.abort(), ASK_TIMEOUT_MS)
-      }
-      const resetSettleTimeout = () => {
-        if (!hasAnswer) {
-          return
-        }
-        window.clearTimeout(settleTimeout)
-        settleTimeout = window.setTimeout(() => {
-          controller.abort()
-        }, 2500)
-      }
-
-      try {
-        if (attempt > 1) {
-          updateMessage(sessionID, messageID, {
-            answer: '',
-            chunks: [],
-            status: t('chat.retrying', { attempt }),
-            loading: true,
-          })
-        }
-
-        await streamChat(
-          {
-            subject_id: currentSubjectID,
-            query: currentQuestion,
-            top_k: CHAT_TOP_K,
-          },
-          {
-            onEvent: resetTimeout,
-            onStatus: (status) => updateMessage(sessionID, messageID, { status }),
-            onSources: (chunks) => updateMessage(sessionID, messageID, { chunks }),
-            onDelta: (content) => {
-              hasAnswer = true
-              resetSettleTimeout()
-              appendAnswer(sessionID, messageID, content)
-            },
-            onDone: () => {
-              window.clearTimeout(settleTimeout)
-              updateMessage(sessionID, messageID, { status: t('chat.done'), loading: false })
-            },
-            onError: () => {
-              window.clearTimeout(settleTimeout)
-              updateMessage(sessionID, messageID, { status: t('chat.retryPrepare') })
-            },
-          },
-          controller.signal,
-        )
-        window.clearTimeout(timeout)
-        window.clearTimeout(settleTimeout)
-        return
-      } catch (error) {
-        window.clearTimeout(timeout)
-        window.clearTimeout(settleTimeout)
-        if (hasAnswer) {
-          updateMessage(sessionID, messageID, { status: t('chat.done'), loading: false })
-          return
-        }
-        lastError = error
-        if (attempt < MAX_ASK_ATTEMPTS) {
-          updateMessage(sessionID, messageID, {
-            status: t('chat.retryNotice', { attempt: attempt + 1 }),
-          })
-          continue
-        }
-      }
-    }
-
-    throw lastError
+  async function askWithRetry(
+    sessionID: string,
+    messageID: string,
+    currentQuestion: string,
+    currentSubjectID: string,
+    currentLLMProvider: string,
+    currentLLMModel: string,
+    currentWebSearch: boolean,
+  ) {
+    return streamAskWithRetry({
+      sessionID,
+      messageID,
+      question: currentQuestion,
+      subjectID: currentSubjectID,
+      llmProvider: currentLLMProvider,
+      llmModel: currentLLMModel,
+      webSearch: currentWebSearch,
+      topK: CHAT_TOP_K,
+      maxAskAttempts: MAX_ASK_ATTEMPTS,
+      askTimeoutMS: ASK_TIMEOUT_MS,
+      labels: {
+        model: (model) => t('chat.process.model', { model }),
+        webSearchEnabled: t('chat.process.webSearchEnabled'),
+        retrying: (attempt) => t('chat.retrying', { attempt }),
+        retryNotice: (attempt) => t('chat.retryNotice', { attempt }),
+        rewriteDone: (query) => t('chat.process.rewriteDone', { query }),
+        rewriteSkipped: t('chat.process.rewriteSkipped'),
+        retrievalDone: (returned, candidates) => t('chat.process.retrievalDone', { returned, candidates }),
+        rerankDone: t('chat.process.rerankDone'),
+        rerankSkipped: t('chat.process.rerankSkipped'),
+        sourcesDone: (count) => t('chat.process.sourcesDone', { count }),
+        webSourcesDone: (count) => t('chat.process.webSourcesDone', { count }),
+        answerStreaming: t('chat.process.answerStreaming'),
+        finished: t('chat.process.finished'),
+        retryPrepare: t('chat.retryPrepare'),
+        done: t('chat.done'),
+      },
+      callbacks: {
+        updateMessage,
+        appendProcessStep,
+        appendAnswer,
+      },
+      classifyChatFailure: (error) => classifyChatFailure(error, t),
+    })
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -307,6 +488,7 @@ export function ChatPage() {
   }
 
   function handleSubjectChange(value: string) {
+    setSubjectSelectOpen(false)
     setSubjectID(value)
     if (!activeSession) {
       return
@@ -314,10 +496,86 @@ export function ChatPage() {
     updateSession(activeSession.id, (session) => ({ ...session, subjectID: value }))
   }
 
+  function handleModelChange(value: string) {
+    if (!value) {
+      return
+    }
+    applyModelChange(parseChatModelValue(value))
+  }
+
+  function applyModelChange(nextModel: SelectedLLM) {
+    const modelChanged =
+      nextModel.provider !== selectedLLMRef.current.provider || nextModel.model !== selectedLLMRef.current.model
+
+    setModelSelectOpen(false)
+    setVendorSelectOpen(false)
+    setExpandedSeriesKey('')
+    setExpandedSeriesIndex(-1)
+
+    if (!modelChanged) {
+      return
+    }
+
+    setSelectedLLM(nextModel)
+    selectedLLMRef.current = nextModel
+
+    if (activeSession?.messages.length) {
+      message.warning(t('chat.modelSwitchWarning'))
+    }
+
+    if (!activeSession) {
+      return
+    }
+
+    updateSession(activeSession.id, (session) => ({
+      ...session,
+      llmProvider: nextModel.provider,
+      llmModel: nextModel.model,
+      updatedAt: Date.now(),
+    }))
+  }
+
+  function handleVendorChange(value: string) {
+    const nextOption = getBestVendorModel(value)
+    applyModelChange({
+      provider: nextOption.provider,
+      model: nextOption.model,
+    })
+  }
+
+  function handleModelDropdownOpenChange(open: boolean) {
+    setModelSelectOpen(open)
+    setExpandedSeriesKey('')
+    setExpandedSeriesIndex(-1)
+  }
+
+  function handleSeriesClick(seriesKey: string, index: number) {
+    const willCollapse = expandedSeriesKey === seriesKey
+    setExpandedSeriesKey(willCollapse ? '' : seriesKey)
+    setExpandedSeriesIndex(willCollapse ? -1 : index)
+  }
+
+  function isActiveModelValue(value: string) {
+    return value === buildChatModelValue(activeModelOption.provider, activeModelOption.model)
+  }
+
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const container = event.currentTarget
     const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
     autoFollowRef.current = remaining < 48
+    setShowScrollToBottom(remaining >= 48)
+  }
+
+  function scrollToBottom() {
+    if (!chatScrollRef.current) {
+      return
+    }
+    chatScrollRef.current.scrollTo({
+      top: chatScrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    })
+    autoFollowRef.current = true
+    setShowScrollToBottom(false)
   }
 
   return (
@@ -329,31 +587,23 @@ export function ChatPage() {
         editingSessionID={editingSessionID}
         editingTitle={editingTitle}
         onEditingTitleChange={setEditingTitle}
-        onCreateSession={() => createSession(subjectID || subjects[0]?.id || '')}
+        onCreateSession={() => void createSession(subjectID || subjects[0]?.id || '')}
         onSelectSession={setActiveSessionID}
         onRenameSession={startRenameSession}
-        onConfirmRenameSession={confirmRenameSession}
+        onConfirmRenameSession={(sessionID) => void confirmRenameSession(sessionID)}
         onCancelRenameSession={cancelRenameSession}
-        onDeleteSession={deleteSession}
+        onDeleteSession={(sessionID) => void deleteSession(sessionID)}
       />
 
       <section className="chat-main">
-        <div className="chat-toolbar">
-          <Select
-            className="chat-subject-select"
-            placeholder={t('chat.selectSubject')}
-            value={subjectID || undefined}
-            options={subjectOptions}
-            onChange={handleSubjectChange}
-          />
-        </div>
-
         {messages.length === 0 ? (
           <div className="chat-scroll" ref={chatScrollRef} onScroll={handleChatScroll}>
-            <div className="chat-empty-state">
-              <h1>{t('chat.title')}</h1>
-              <p>{t('chat.subtitle')}</p>
-            </div>
+            <ChatEmptyState
+              subjectID={subjectID}
+              subjects={subjects}
+              subjectOverview={subjectOverview}
+              subjectOverviewLoading={subjectOverviewLoading}
+            />
           </div>
         ) : (
           <div className="chat-scroll" ref={chatScrollRef} onScroll={handleChatScroll}>
@@ -364,26 +614,53 @@ export function ChatPage() {
             </div>
           </div>
         )}
-
-        <div className="chat-composer">
-          <Input.TextArea
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder={t('chat.inputPlaceholder')}
-            autoSize={{ minRows: 1, maxRows: 10 }}
-            disabled={asking}
-            className="chat-input"
-          />
+        {showScrollToBottom && messages.length > 0 ? (
           <Button
             type="primary"
-            icon={<SendOutlined />}
-            loading={asking}
-            aria-label={t('chat.send')}
-            onClick={() => void handleAsk()}
+            shape="circle"
+            className="chat-scroll-bottom-button"
+            icon={<DownOutlined />}
+            aria-label={t('chat.scrollToBottom')}
+            onClick={scrollToBottom}
           />
-        </div>
+        ) : null}
+        <ChatComposer
+          asking={asking}
+          question={question}
+          subjectID={subjectID}
+          subjects={subjects}
+          subjectOptions={subjectOptions}
+          vendorOptions={vendorOptions}
+          modelOptions={modelOptions}
+          activeModelLabel={activeModelOption.label}
+          activeModelValue={buildChatModelValue(activeModelOption.provider, activeModelOption.model)}
+          activeVendor={activeModelOption.vendor}
+          subjectSelectOpen={subjectSelectOpen}
+          vendorSelectOpen={vendorSelectOpen}
+          modelSelectOpen={modelSelectOpen}
+          expandedSeriesKey={expandedSeriesKey}
+          expandedSeriesIndex={expandedSeriesIndex}
+          webSearch={webSearch}
+          evaluationDisabled={!subjectID || asking}
+          onQuestionChange={setQuestion}
+          onInputKeyDown={handleInputKeyDown}
+          onSubjectChange={handleSubjectChange}
+          onSubjectOpenChange={setSubjectSelectOpen}
+          onEvaluationOpen={() => setEvaluationOpen(true)}
+          onWebSearchChange={setWebSearch}
+          onModelDropdownOpenChange={handleModelDropdownOpenChange}
+          onVendorChange={handleVendorChange}
+          onVendorOpenChange={setVendorSelectOpen}
+          onModelChange={handleModelChange}
+          onSeriesClick={handleSeriesClick}
+          onAsk={() => void handleAsk()}
+        />
       </section>
+      <RetrievalEvaluationModal
+        open={evaluationOpen}
+        subjectID={subjectID}
+        onClose={() => setEvaluationOpen(false)}
+      />
     </div>
   )
 }

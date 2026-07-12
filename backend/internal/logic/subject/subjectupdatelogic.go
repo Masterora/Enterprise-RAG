@@ -11,7 +11,10 @@ import (
 
 	"enterprise-rag/backend/internal/auth"
 	"enterprise-rag/backend/internal/model"
+	subjectpresenter "enterprise-rag/backend/internal/presenter/subject"
+	"enterprise-rag/backend/internal/repository"
 	pgrepo "enterprise-rag/backend/internal/repository/postgres"
+	"enterprise-rag/backend/internal/service/subjectmeta"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
@@ -50,10 +53,13 @@ func (l *SubjectUpdateLogic) SubjectUpdate(req *types.SubjectUpdateReq) (resp *t
 		Name:        name,
 		Description: strings.TrimSpace(req.Description),
 		OwnerID:     user.ID,
-		Visibility:  normalizeVisibility(req.Visibility),
+		Visibility:  subjectmeta.NormalizeVisibility(req.Visibility),
 		UpdatedAt:   now,
 	}
 	if err := l.svcCtx.SubjectRepo.UpdateByOwner(l.ctx, subject); err != nil {
+		if errors.Is(err, repository.ErrSubjectNameExists) {
+			return nil, errors.New("knowledge base name already exists")
+		}
 		if errors.Is(err, pgrepo.ErrSubjectNotFound) {
 			return nil, errors.New("knowledge base not found")
 		}
@@ -66,6 +72,6 @@ func (l *SubjectUpdateLogic) SubjectUpdate(req *types.SubjectUpdateReq) (resp *t
 	}
 
 	return &types.SubjectUpdateResp{
-		Subject: toSubjectInfo(*updated),
+		Subject: subjectpresenter.ToInfo(*updated),
 	}, nil
 }

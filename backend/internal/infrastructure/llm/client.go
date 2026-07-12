@@ -6,23 +6,23 @@ import (
 	"strings"
 
 	"enterprise-rag/backend/internal/config"
+	"enterprise-rag/backend/internal/types"
 )
 
 type Client interface {
-	Generate(ctx context.Context, prompt string) (string, error)
-	GenerateStream(ctx context.Context, prompt string, onDelta func(string) error) error
+	Generate(ctx context.Context, prompt string, webSearch bool) (string, error)
+	GenerateStream(ctx context.Context, prompt string, webSearch bool, onDelta func(string) error) error
+	SearchWeb(ctx context.Context, query string) ([]types.ExternalLink, error)
 }
 
 func NewClient(c config.ProviderConf) (Client, error) {
 	switch strings.ToLower(strings.TrimSpace(c.Provider)) {
-	case "openai":
-		return NewOpenAIClient(c.ApiKey, c.Model), nil
 	case "qwen":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1")), nil
+		return NewCompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1")), nil
 	case "openrouter":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://openrouter.ai/api/v1")), nil
-	case "openai_compatible":
-		return NewOpenAICompatibleClient(c.ApiKey, c.Model, c.BaseURL), nil
+		return NewCompatibleClient(c.ApiKey, c.Model, defaultString(c.BaseURL, "https://openrouter.ai/api/v1")), nil
+	case "compatible":
+		return NewCompatibleClient(c.ApiKey, c.Model, c.BaseURL), nil
 	default:
 		return nil, errors.New("unsupported llm provider")
 	}

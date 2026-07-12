@@ -1,0 +1,68 @@
+syntax = "v1"
+
+type AuthLoginReq {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type AuthRegisterReq {
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+	Nickname        string `json:"nickname,optional"`
+	Email           string `json:"email,optional"`
+}
+
+type AuthLoginResp {
+	Token string   `json:"token"`
+	User  UserInfo `json:"user"`
+}
+
+type UserMeResp {
+	User UserInfo `json:"user"`
+}
+
+type UserUpdateReq {
+	Nickname string `json:"nickname,optional"`
+	Email    string `json:"email,optional"`
+	Language string `json:"language"`
+}
+
+type UserUpdateResp {
+	User UserInfo `json:"user"`
+}
+
+type UserPasswordUpdateReq {
+	OldPassword     string `json:"old_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+type UserPasswordUpdateResp {}
+
+@server (
+	group: auth
+)
+service rag-api {
+	@handler AuthLoginHandler
+	post /api/auth/login (AuthLoginReq) returns (AuthLoginResp)
+
+	@handler AuthRegisterHandler
+	post /api/auth/register (AuthRegisterReq) returns (AuthLoginResp)
+}
+
+@server (
+	group:      auth
+	middleware: AuthMiddleware
+)
+service rag-api {
+	@handler UserMeHandler
+	post /api/users/me returns (UserMeResp)
+
+	@handler UserUpdateHandler
+	post /api/users/update (UserUpdateReq) returns (UserUpdateResp)
+
+	@handler UserPasswordUpdateHandler
+	post /api/users/password/update (UserPasswordUpdateReq) returns (UserPasswordUpdateResp)
+}
+

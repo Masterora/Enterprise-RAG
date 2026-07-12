@@ -1,10 +1,67 @@
 import { getStoredToken } from './token'
-import type { RetrievalChunk } from './retrieval'
+import type { RetrievalChunk, RetrievalMetrics } from './retrieval'
+import { apiClient } from './client'
+
+export interface ExternalLink {
+  title: string
+  url: string
+  snippet: string
+}
+
+export interface StoredChatMessage {
+  id: string
+  question: string
+  answer: string
+  chunks: RetrievalChunk[]
+  external_links: ExternalLink[]
+  metrics: RetrievalMetrics
+  model_label: string
+  model_id: string
+  web_search: boolean
+  created_at: string
+}
+
+export interface StoredChatSession {
+  id: string
+  title: string
+  subject_id: string
+  llm_provider: string
+  llm_model: string
+  created_at: string
+  updated_at: string
+  messages: StoredChatMessage[]
+}
+
+export async function createChatSession(payload: {
+  id: string
+  subject_id?: string
+  title: string
+  llm_provider?: string
+  llm_model?: string
+}) {
+  const response = await apiClient.post<{ session: StoredChatSession }>('/chat/sessions/create', payload)
+  return response.data.session
+}
+
+export async function listChatSessions() {
+  const response = await apiClient.post<{ list: StoredChatSession[] }>('/chat/sessions/list')
+  return response.data.list
+}
+
+export async function updateChatSession(payload: { id: string; title: string }) {
+  await apiClient.post('/chat/sessions/update', payload)
+}
+
+export async function deleteChatSession(id: string) {
+  await apiClient.post('/chat/sessions/delete', { id })
+}
 
 export interface ChatStreamHandlers {
   onEvent?: () => void
   onStatus?: (message: string) => void
   onSources?: (chunks: RetrievalChunk[]) => void
+  onWebSources?: (links: ExternalLink[]) => void
+  onMetrics?: (metrics: RetrievalMetrics) => void
   onDelta?: (content: string) => void
   onDone?: () => void
   onError?: (message: string) => void
@@ -12,9 +69,16 @@ export interface ChatStreamHandlers {
 
 export async function streamChat(
   payload: {
+    session_id?: string
+    message_id?: string
     subject_id: string
     query: string
     top_k?: number
+    llm_provider?: string
+    llm_model?: string
+    web_search?: boolean
+    expected_doc_ids?: string[]
+    expected_chunk_ids?: string[]
   },
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
@@ -31,7 +95,8 @@ export async function streamChat(
   })
 
   if (!response.ok || !response.body) {
-    throw new Error('问答请求失败')
+    const rawBody = await response.text().catch(() => '')
+    throw new Error(extractStreamErrorMessage(response.status, rawBody))
   }
 
   const reader = response.body.getReader()
@@ -61,6 +126,20 @@ export async function streamChat(
   }
 }
 
+function extractStreamErrorMessage(status: number, rawBody: string) {
+  const body = rawBody.trim()
+  if (!body) {
+    return `问答请求失败（${status}）`
+  }
+
+  try {
+    const parsed = JSON.parse(body) as { message?: string; error?: { message?: string } }
+    return parsed.message || parsed.error?.message || `问答请求失败（${status}）`
+  } catch {
+    return body
+  }
+}
+
 function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
   const lines = rawEvent.split('\n')
   const event = lines
@@ -82,6 +161,17 @@ function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
     message?: string
     content?: string
     chunks?: RetrievalChunk[]
+    links?: ExternalLink[]
+    original_query?: string
+    search_query?: string
+    query_rewritten?: boolean
+    reranked?: boolean
+    top_k?: number
+    candidate_count?: number
+    returned_count?: number
+    expected_count?: number
+    recall_hit_count?: number
+    recall_at_k?: number
   }
 
   if (event === 'status' && parsed.message) {
@@ -90,6 +180,14 @@ function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
   }
   if (event === 'sources') {
     handlers.onSources?.(parsed.chunks ?? [])
+    return false
+  }
+  if (event === 'web_sources') {
+    handlers.onWebSources?.(parsed.links ?? [])
+    return false
+  }
+  if (event === 'metrics') {
+    handlers.onMetrics?.(parsed as RetrievalMetrics)
     return false
   }
   if (event === 'delta' && parsed.content) {

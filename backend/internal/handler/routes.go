@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	admin "enterprise-rag/backend/internal/handler/admin"
 	auth "enterprise-rag/backend/internal/handler/auth"
 	chat "enterprise-rag/backend/internal/handler/chat"
 	document "enterprise-rag/backend/internal/handler/document"
@@ -17,7 +18,38 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
-	authMiddleware := serverCtx.AuthMiddleware.Handle
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/admin/logs/clear",
+					Handler: admin.AdminLogClearHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/admin/logs/list",
+					Handler: admin.AdminLogListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/admin/summary",
+					Handler: admin.AdminSummaryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/admin/tasks/clear",
+					Handler: admin.AdminTaskClearHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/admin/tasks/list",
+					Handler: admin.AdminTaskListHandler(serverCtx),
+				},
+			}...,
+		),
+	)
 
 	server.AddRoutes(
 		[]rest.Route{
@@ -35,97 +67,147 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	)
 
 	server.AddRoutes(
-		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/users/me",
-				Handler: auth.UserMeHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/users/update",
-				Handler: auth.UserUpdateHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/users/password/update",
-				Handler: auth.UserPasswordUpdateHandler(serverCtx),
-			},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/users/me",
+					Handler: auth.UserMeHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/users/password/update",
+					Handler: auth.UserPasswordUpdateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/users/update",
+					Handler: auth.UserUpdateHandler(serverCtx),
+				},
+			}...,
 		),
 	)
 
 	server.AddRoutes(
-		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/documents/list",
-				Handler: document.DocumentListHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/documents/clear-failed",
-				Handler: document.DocumentClearFailedHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/documents/upload",
-				Handler: document.DocumentUploadHandler(serverCtx),
-			},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/ask",
+					Handler: chat.ChatAskHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/sessions/create",
+					Handler: chat.ChatSessionCreateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/sessions/delete",
+					Handler: chat.ChatSessionDeleteHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/sessions/list",
+					Handler: chat.ChatSessionListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/sessions/update",
+					Handler: chat.ChatSessionUpdateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/chat/stream",
+					Handler: chat.ChatStreamHandler(serverCtx),
+				},
+			}...,
 		),
 	)
 
 	server.AddRoutes(
-		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/retrieval/search",
-				Handler: retrieval.RetrievalSearchHandler(serverCtx),
-			},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/clear-failed",
+					Handler: document.DocumentClearFailedHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/delete",
+					Handler: document.DocumentDeleteHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/detail",
+					Handler: document.DocumentDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/list",
+					Handler: document.DocumentListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/tasks/retry",
+					Handler: document.IndexTaskRetryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/documents/upload",
+					Handler: document.DocumentUploadHandler(serverCtx),
+				},
+			}...,
 		),
 	)
 
 	server.AddRoutes(
-		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/chat/ask",
-				Handler: chat.ChatAskHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/chat/stream",
-				Handler: chat.ChatStreamHandler(serverCtx),
-			},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/retrieval/search",
+					Handler: retrieval.RetrievalSearchHandler(serverCtx),
+				},
+			}...,
 		),
 	)
 
 	server.AddRoutes(
-		rest.WithMiddlewares([]rest.Middleware{authMiddleware},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/subjects/create",
-				Handler: subject.SubjectCreateHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/subjects/delete",
-				Handler: subject.SubjectDeleteHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/subjects/detail",
-				Handler: subject.SubjectDetailHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/subjects/list",
-				Handler: subject.SubjectListHandler(serverCtx),
-			},
-			rest.Route{
-				Method:  http.MethodPost,
-				Path:    "/api/subjects/update",
-				Handler: subject.SubjectUpdateHandler(serverCtx),
-			},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.AuthMiddleware},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/subjects/create",
+					Handler: subject.SubjectCreateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/subjects/delete",
+					Handler: subject.SubjectDeleteHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/subjects/detail",
+					Handler: subject.SubjectDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/subjects/list",
+					Handler: subject.SubjectListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/api/subjects/update",
+					Handler: subject.SubjectUpdateHandler(serverCtx),
+				},
+			}...,
 		),
 	)
 }

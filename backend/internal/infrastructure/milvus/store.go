@@ -160,6 +160,26 @@ func (s *Store) DeleteByDocIDs(ctx context.Context, userID string, docIDs []stri
 	return s.deleteByFilter(ctx, filter)
 }
 
+func (s *Store) HasDocVectors(ctx context.Context, userID, docID string) (bool, error) {
+	docID = strings.TrimSpace(docID)
+	userID = strings.TrimSpace(userID)
+	if docID == "" || userID == "" {
+		return false, nil
+	}
+
+	var result []map[string]any
+	err := s.doWithResponse(ctx, "/v2/vectordb/entities/query", map[string]any{
+		"collectionName": s.config.Collection,
+		"filter":         fmt.Sprintf(`user_id == "%s" AND doc_id == "%s"`, escapeFilterValue(userID), escapeFilterValue(docID)),
+		"limit":          1,
+		"outputFields":   []string{"id"},
+	}, &result)
+	if err != nil {
+		return false, err
+	}
+	return len(result) > 0, nil
+}
+
 func (s *Store) DeleteBySubject(ctx context.Context, userID, subjectID string) error {
 	subjectID = strings.TrimSpace(subjectID)
 	if subjectID == "" {
