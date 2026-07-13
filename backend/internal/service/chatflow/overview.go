@@ -9,26 +9,23 @@ import (
 	"strings"
 	"unicode"
 
-	"enterprise-rag/backend/internal/config"
-	"enterprise-rag/backend/internal/infrastructure/llm"
 	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
-
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type overviewDocSummary struct {
-	document model.Document
-	sections []string
-	chunk    *types.RetrievalChunk
-	count    int
+	document   model.Document
+	sections   []string
+	chunk      *types.RetrievalChunk
+	chunkScore float64
+	count      int
 }
 
-func buildKnowledgeOverview(
+func BuildKnowledgeOverviewTool(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
-	userID, subjectID, query, llmProvider, llmModel string,
+	userID, subjectID string,
 ) (string, []types.RetrievalChunk, error) {
 	subject, err := svcCtx.SubjectRepo.GetAccessibleByID(ctx, subjectID, userID)
 	if err != nil {
@@ -69,10 +66,11 @@ func buildKnowledgeOverview(
 		if isWeakSection(section) {
 			section = ""
 		}
-		if section != "" && len(summary.sections) < 3 && !containsString(summary.sections, section) {
+		if section != "" && len(summary.sections) < 8 && !containsString(summary.sections, section) {
 			summary.sections = append(summary.sections, section)
 		}
-		if summary.chunk == nil && strings.TrimSpace(chunk.Content) != "" {
+		score := overviewChunkScore(chunk.Section, chunk.Content, chunk.ChunkIndex)
+		if strings.TrimSpace(chunk.Content) != "" && (summary.chunk == nil || score > summary.chunkScore) {
 			summary.chunk = &types.RetrievalChunk{
 				ID:         chunk.ID,
 				DocID:      chunk.DocID,
@@ -83,10 +81,9 @@ func buildKnowledgeOverview(
 				Page:       int64(chunk.Page),
 				Section:    chunk.Section,
 				Content:    chunk.Content,
-				Score:      1,
-				RawScore:   1,
-				Source:     "router",
+				Source:     "overview",
 			}
+			summary.chunkScore = score
 		}
 	}
 
@@ -109,19 +106,13 @@ func buildKnowledgeOverview(
 	}
 
 	unique := dedupeOverviewSummaries(ordered)
-	themes := collectOverviewThemes(unique, 4)
 	limit := minInt(len(unique), 4)
 	citations := make([]types.RetrievalChunk, 0, limit)
 	for index := 0; index < limit; index++ {
 		citations = append(citations, *unique[index].chunk)
 	}
 
-	draft := buildStructuredKnowledgeOverview(subject.Name, len(documents), themes, unique[:limit], citations)
-	if overview, err := polishKnowledgeOverview(ctx, svcCtx, query, draft, unique[:limit], llmProvider, llmModel); err == nil && strings.TrimSpace(overview) != "" {
-		return formatOverviewAnswer(strings.TrimSpace(overview)), citations, nil
-	} else if err != nil {
-		logx.WithContext(ctx).Errorf("knowledge overview llm failed: subject_id=%s err=%v", subjectID, err)
-	}
+	draft := buildStructuredKnowledgeOverview(subject.Name, len(documents), unique[:limit])
 	return formatOverviewAnswer(draft), citations, nil
 }
 
@@ -142,84 +133,9 @@ func dedupeOverviewSummaries(items []*overviewDocSummary) []*overviewDocSummary 
 	return result
 }
 
-func collectOverviewThemes(items []*overviewDocSummary, limit int) []string {
-	if limit <= 0 {
-		limit = 4
-	}
-	counts := make(map[string]int)
-	ordered := make([]string, 0)
-	for _, item := range items {
-		for _, section := range item.sections {
-			section = strings.TrimSpace(section)
-			if isWeakSection(section) {
-				continue
-			}
-			if _, ok := counts[section]; !ok {
-				ordered = append(ordered, section)
-			}
-			counts[section]++
-		}
-	}
-	sort.SliceStable(ordered, func(i, j int) bool {
-		if counts[ordered[i]] == counts[ordered[j]] {
-			return len([]rune(ordered[i])) < len([]rune(ordered[j]))
-		}
-		return counts[ordered[i]] > counts[ordered[j]]
-	})
-	if len(ordered) > limit {
-		ordered = ordered[:limit]
-	}
-	return ordered
-}
-
-func polishKnowledgeOverview(
-	ctx context.Context,
-	svcCtx *svc.ServiceContext,
-	query string,
-	draft string,
-	summaries []*overviewDocSummary,
-	llmProvider, llmModel string,
-) (string, error) {
-	client, err := resolveRouteLLM(svcCtx, llmProvider, llmModel)
-	if err != nil {
-		return "", err
-	}
-
-	formattedSummaries := make([]overviewDocSummary, 0, len(summaries))
-	for _, summary := range summaries {
-		formattedSummaries = append(formattedSummaries, *summary)
-	}
-	answer, err := GenerateAnswer(ctx, client, svcCtx.Config.Reliability,
-		BuildOverviewPolishPrompt(svcCtx.Config.Prompt, query, draft, formattedSummaries))
-	if err != nil {
-		return "", err
-	}
-	return formatOverviewAnswer(answer), nil
-}
-
-func resolveRouteLLM(svcCtx *svc.ServiceContext, provider, model string) (llm.Client, error) {
-	override := config.ProviderConf{
-		Provider: strings.TrimSpace(provider),
-		Model:    strings.TrimSpace(model),
-		ApiKey:   svcCtx.Config.LLM.ApiKey,
-		BaseURL:  svcCtx.Config.LLM.BaseURL,
-	}
-	if override.Provider == "" {
-		override.Provider = svcCtx.Config.LLM.Provider
-	}
-	if override.Model == "" {
-		override.Model = svcCtx.Config.LLM.Model
-	}
-	if strings.EqualFold(override.Provider, strings.TrimSpace(svcCtx.Config.LLM.Provider)) &&
-		strings.TrimSpace(override.Model) == strings.TrimSpace(svcCtx.Config.LLM.Model) {
-		return svcCtx.LLM, nil
-	}
-	return llm.NewClient(override)
-}
-
-func buildStructuredKnowledgeOverview(subjectName string, documentCount int, themes []string, summaries []*overviewDocSummary, citations []types.RetrievalChunk) string {
+func buildStructuredKnowledgeOverview(subjectName string, documentCount int, summaries []*overviewDocSummary) string {
 	lines := make([]string, 0, len(summaries)+2)
-	lines = append(lines, buildOverviewLead(subjectName, documentCount, themes, citations))
+	lines = append(lines, fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档。以下是供答案生成使用的代表资料：", subjectName, documentCount))
 	for index, summary := range summaries {
 		title := buildOverviewTitle(summary)
 		description := buildOverviewDescription(summary)
@@ -246,49 +162,43 @@ func formatOverviewAnswer(answer string) string {
 	return strings.Join(lines, "\n")
 }
 
-func buildOverviewLead(subjectName string, documentCount int, themes []string, citations []types.RetrievalChunk) string {
-	lead := fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档。", subjectName, documentCount)
-	if len(themes) > 0 {
-		lead = fmt.Sprintf("知识库“%s”当前共包含 %d 篇已索引文档，主要覆盖 %s 等方向。", subjectName, documentCount, strings.Join(themes, "、"))
-	}
-	if refs := buildOverviewReferenceSuffix(citations, minInt(len(citations), 3)); refs != "" {
-		lead = lead + " " + refs
-	}
-	return lead
-}
-
-func buildOverviewReferenceSuffix(citations []types.RetrievalChunk, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-	refs := make([]string, 0, limit)
-	for index := 0; index < limit && index < len(citations); index++ {
-		refs = append(refs, fmt.Sprintf("[引用%d]", index+1))
-	}
-	return strings.Join(refs, " ")
-}
-
 func buildOverviewTitle(summary *overviewDocSummary) string {
-	title := cleanOverviewSections(summary.sections)
-	if title == "" {
-		title = strings.TrimSuffix(summary.document.Filename, filepath.Ext(summary.document.Filename))
-	}
-	return shortenOverviewTitle(title, 22)
+	title := strings.TrimSuffix(summary.document.Filename, filepath.Ext(summary.document.Filename))
+	return shortenOverviewTitle(title, 60)
 }
 
 func buildOverviewDescription(summary *overviewDocSummary) string {
 	if summary.chunk == nil {
 		return "可进一步查看对应文档内容。"
 	}
-	content := compactRunes(strings.TrimSpace(summary.chunk.Content), 150)
+	content := compactRunes(strings.TrimSpace(summary.chunk.Content), 220)
 	content = strings.TrimSpace(content)
 	content = strings.TrimPrefix(content, buildOverviewTitle(summary))
 	content = strings.TrimLeft(content, "：:，,。;；、 ")
 	content = trimRepeatedLead(content)
-	if content == "" {
+	sections := cleanOverviewSections(summary.sections)
+	if sections != "" {
+		content = fmt.Sprintf("代表章节：%s。代表内容：%s", compactRunes(sections, 100), content)
+	}
+	if strings.TrimSpace(content) == "" {
 		return "可进一步查看对应文档内容。"
 	}
 	return content
+}
+
+func overviewChunkScore(section, content string, chunkIndex int) float64 {
+	contentLength := len([]rune(strings.TrimSpace(content)))
+	if contentLength == 0 {
+		return -1
+	}
+	score := float64(minInt(contentLength, 1000)) / 100
+	if !isWeakSection(section) && !isMeaninglessTheme(trimSectionPrefix(section)) {
+		score += 12
+	}
+	if chunkIndex < 5 {
+		score += float64(5 - chunkIndex)
+	}
+	return score
 }
 
 func shortenOverviewTitle(title string, limit int) string {

@@ -38,16 +38,16 @@ type AdminLogListResp {
 }
 
 type AdminSummaryResp {
-	SubjectTotal     int64 `json:"subject_total"`
-	DocumentTotal    int64 `json:"document_total"`
-	ChunkTotal       int64 `json:"chunk_total"`
-	SessionTotal     int64 `json:"session_total"`
-	IndexedTotal     int64 `json:"indexed_total"`
-	ProcessingTotal  int64 `json:"processing_total"`
-	FailedTotal      int64 `json:"failed_total"`
-	PendingTaskTotal int64 `json:"pending_task_total"`
-	RunningTaskTotal int64 `json:"running_task_total"`
-	FailedTaskTotal  int64 `json:"failed_task_total"`
+	SubjectTotal     int64  `json:"subject_total"`
+	DocumentTotal    int64  `json:"document_total"`
+	ChunkTotal       int64  `json:"chunk_total"`
+	SessionTotal     int64  `json:"session_total"`
+	IndexedTotal     int64  `json:"indexed_total"`
+	ProcessingTotal  int64  `json:"processing_total"`
+	FailedTotal      int64  `json:"failed_total"`
+	PendingTaskTotal int64  `json:"pending_task_total"`
+	RunningTaskTotal int64  `json:"running_task_total"`
+	FailedTaskTotal  int64  `json:"failed_task_total"`
 }
 
 @server (
@@ -70,4 +70,3 @@ service rag-api {
 	@handler AdminLogClearHandler
 	post /api/admin/logs/clear (AdminLogClearReq) returns (AdminLogClearResp)
 }
-

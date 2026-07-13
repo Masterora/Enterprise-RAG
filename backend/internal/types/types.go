@@ -53,6 +53,18 @@ type AdminTaskListResp struct {
 	Total int64           `json:"total"`
 }
 
+type AgentStep struct {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	Tool       string `json:"tool"`
+	State      string `json:"state"`
+	Iteration  int    `json:"iteration"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail"`
+	DurationMS int64  `json:"duration_ms"`
+}
+
 type AuthLoginReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -91,6 +103,7 @@ type ChatAskResp struct {
 	Chunks        []RetrievalChunk `json:"chunks"`
 	ExternalLinks []ExternalLink   `json:"external_links"`
 	Metrics       RetrievalMetrics `json:"metrics"`
+	AgentSteps    []AgentStep      `json:"agent_steps"`
 }
 
 type ChatMessageInfo struct {
@@ -103,6 +116,7 @@ type ChatMessageInfo struct {
 	ModelLabel    string           `json:"model_label"`
 	ModelID       string           `json:"model_id"`
 	WebSearch     bool             `json:"web_search"`
+	AgentSteps    []AgentStep      `json:"agent_steps"`
 	CreatedAt     string           `json:"created_at"`
 }
 

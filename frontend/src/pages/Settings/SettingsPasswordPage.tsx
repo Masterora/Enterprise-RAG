@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, message } from 'antd'
+import { App as AntdApp, Button, Card, Form, Input } from 'antd'
 import axios from 'axios'
 import { updatePassword } from '../../api/auth'
 import { useI18n } from '../../useI18n'
@@ -10,6 +10,7 @@ type PasswordFormValues = {
 }
 
 export function SettingsPasswordPage() {
+	const { message } = AntdApp.useApp()
   const [form] = Form.useForm<PasswordFormValues>()
   const { t } = useI18n()
 

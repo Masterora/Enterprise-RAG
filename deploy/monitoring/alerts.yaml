@@ -1,0 +1,70 @@
+groups:
+  - name: enterprise-rag-availability
+    rules:
+      - alert: EnterpriseRAGHighHTTPErrorRate
+        expr: |
+          sum(rate(enterprise_rag_http_requests_total{status_class="5xx"}[5m]))
+          /
+          clamp_min(sum(rate(enterprise_rag_http_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG HTTP 5xx 比例持续高于 5%
+
+      - alert: EnterpriseRAGHighAgentFailureRate
+        expr: |
+          sum(rate(enterprise_rag_agent_runs_total{status=~"error|timeout"}[10m]))
+          /
+          clamp_min(sum(rate(enterprise_rag_agent_runs_total[10m])), 0.001) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG Agent 失败率持续高于 10%
+
+      - alert: EnterpriseRAGHighModelFailureRate
+        expr: |
+          sum(rate(enterprise_rag_model_calls_total{status=~"error|timeout"}[10m]))
+          /
+          clamp_min(sum(rate(enterprise_rag_model_calls_total[10m])), 0.001) > 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG 模型调用失败率持续高于 10%
+
+      - alert: EnterpriseRAGHighWorkerFailureRate
+        expr: |
+          sum(rate(enterprise_rag_worker_tasks_total{status="error"}[10m]))
+          /
+          clamp_min(sum(rate(enterprise_rag_worker_tasks_total[10m])), 0.001) > 0.10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG 文档任务失败率持续高于 10%
+
+  - name: enterprise-rag-latency
+    rules:
+      - alert: EnterpriseRAGAgentP95LatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(enterprise_rag_agent_run_duration_seconds_bucket[10m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG Agent P95 延迟持续高于 30 秒
+
+      - alert: EnterpriseRAGRetrievalP95LatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(enterprise_rag_retrieval_duration_seconds_bucket[10m]))
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Enterprise-RAG 检索 P95 延迟持续高于 5 秒

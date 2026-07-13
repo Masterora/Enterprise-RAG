@@ -4,7 +4,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +25,8 @@ type Config struct {
 	Chunking    ChunkingConf
 	Retrieval   RetrievalConf
 	Reliability ReliabilityConf
+	Agent       AgentConf
+	Metrics     MetricsConf
 	Evaluation  EvaluationConf
 	Auth        AuthConf
 	LLM         ProviderConf
@@ -98,17 +99,29 @@ type ReliabilityConf struct {
 	RetryBackoffMillis int
 }
 
-type EvaluationConf struct {
-	CasesFile    string
-	MinRecallAtK float64
-	MaxLatencyMS int64
+type AgentConf struct {
+	Enabled             bool
+	MaxIterations       int
+	MaxTools            int
+	MaxTotalTools       int
+	TimeoutSeconds      int
+	ToolTimeoutSeconds  int
+	MaxQuestionRunes    int
+	MaxArgumentRunes    int
+	MaxObservationRunes int
+	MaxStepDetailRunes  int
+	ParallelTools       bool
+	EnabledTools        []string
 }
 
-type EvaluationCase struct {
-	Name              string   `yaml:"name"`
-	Query             string   `yaml:"query"`
-	ExpectedRoute     string   `yaml:"expected_route"`
-	ExpectedDocuments []string `yaml:"expected_documents"`
+type MetricsConf struct {
+	Enabled bool
+	Path    string
+}
+
+type EvaluationConf struct {
+	MinRecallAtK float64
+	MaxLatencyMS int64
 }
 
 type AuthConf struct {
@@ -132,12 +145,9 @@ type EmbeddingConf struct {
 }
 
 type PromptConf struct {
-	AnswerTemplate         string `json:",optional"`
-	ExplanationTemplate    string `json:",optional"`
-	WebSearchTemplate      string `json:",optional"`
-	OverviewPolishTemplate string `json:",optional"`
-	QueryRewriteTemplate   string `json:",optional"`
-	RouteTemplate          string `json:",optional"`
+	QueryRewriteTemplate string `json:",optional"`
+	AgentPlanTemplate    string `json:",optional"`
+	AgentAnswerTemplate  string `json:",optional"`
 }
 
 type manifest struct {
@@ -158,6 +168,7 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("parse config manifest: %w", err)
 	}
 	delete(root, "Includes")
+	mergedConfig := make(map[string]any)
 	baseDir := filepath.Dir(path)
 	for _, include := range files.Includes {
 		includePath, err := resolveIncludePath(baseDir, include)
@@ -168,9 +179,10 @@ func Load(path string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		mergeYAMLMap(root, included)
+		mergeYAMLMap(mergedConfig, included)
 	}
-	merged, err := yaml.Marshal(root)
+	mergeYAMLMap(mergedConfig, root)
+	merged, err := yaml.Marshal(mergedConfig)
 	if err != nil {
 		return Config{}, fmt.Errorf("merge config: %w", err)
 	}
@@ -178,36 +190,16 @@ func Load(path string) (Config, error) {
 	if err := conf.LoadFromYamlBytes([]byte(os.ExpandEnv(string(merged))), &result); err != nil {
 		return Config{}, err
 	}
-	if result.Evaluation.CasesFile != "" {
-		casesPath, err := resolveIncludePath(baseDir, result.Evaluation.CasesFile)
-		if err != nil {
-			return Config{}, err
+	if result.Metrics.Enabled {
+		result.Metrics.Path = strings.TrimSpace(result.Metrics.Path)
+		if result.Metrics.Path == "" {
+			result.Metrics.Path = "/metrics"
 		}
-		result.Evaluation.CasesFile = casesPath
+		if !strings.HasPrefix(result.Metrics.Path, "/") || result.Metrics.Path == "/" || strings.HasPrefix(result.Metrics.Path, "/api/") {
+			return Config{}, fmt.Errorf("metrics path must be an absolute non-API path")
+		}
 	}
 	return result, nil
-}
-
-func LoadEvaluationCases(path string) ([]EvaluationCase, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read evaluation cases %s: %w", path, err)
-	}
-	var document struct {
-		Cases []EvaluationCase `yaml:"cases"`
-	}
-	if err := yaml.Unmarshal(raw, &document); err != nil {
-		return nil, fmt.Errorf("parse evaluation cases %s: %w", path, err)
-	}
-	if len(document.Cases) == 0 {
-		return nil, errors.New("evaluation cases are empty")
-	}
-	for index := range document.Cases {
-		if strings.TrimSpace(document.Cases[index].Name) == "" || strings.TrimSpace(document.Cases[index].Query) == "" {
-			return nil, fmt.Errorf("evaluation case %d requires name and query", index+1)
-		}
-	}
-	return document.Cases, nil
 }
 
 func resolveIncludePath(baseDir, include string) (string, error) {

@@ -10,11 +10,12 @@ import (
 	"enterprise-rag/backend/internal/infrastructure/llm"
 	milvusinfra "enterprise-rag/backend/internal/infrastructure/milvus"
 	minioinfra "enterprise-rag/backend/internal/infrastructure/minio"
+	"enterprise-rag/backend/internal/infrastructure/observability"
 	"enterprise-rag/backend/internal/infrastructure/postgres"
 	"enterprise-rag/backend/internal/middleware"
 	"enterprise-rag/backend/internal/repository"
 	pgrepo "enterprise-rag/backend/internal/repository/postgres"
-	"log"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -31,6 +32,7 @@ type ServiceContext struct {
 	Embedder       embedding.Embedder
 	LLM            llm.Client
 	MilvusStore    *milvusinfra.Store
+	Metrics        *observability.Metrics
 	AuthMiddleware rest.Middleware
 	UserRepo       repository.UserRepository
 	SubjectRepo    repository.SubjectRepository
@@ -41,13 +43,14 @@ type ServiceContext struct {
 	AdminRepo      repository.AdminRepository
 }
 
-func NewServiceContext(c config.Config) *ServiceContext {
+func NewServiceContext(c config.Config) (*ServiceContext, error) {
 	db, err := pgxpool.New(context.Background(), c.Postgres.DataSource)
 	if err != nil {
-		log.Fatalf("connect postgres: %v", err)
+		return nil, fmt.Errorf("connect postgres: %w", err)
 	}
 	if err := postgres.RunMigrations(context.Background(), db); err != nil {
-		log.Fatalf("run postgres migrations: %v", err)
+		db.Close()
+		return nil, fmt.Errorf("run postgres migrations: %w", err)
 	}
 
 	minioClient, err := minio.New(c.MinIO.Endpoint, &minio.Options{
@@ -55,30 +58,35 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Secure: c.MinIO.UseSSL,
 	})
 	if err != nil {
-		log.Fatalf("create minio client: %v", err)
+		db.Close()
+		return nil, fmt.Errorf("create minio client: %w", err)
 	}
 	if err := minioinfra.EnsureBucket(context.Background(), minioClient, c.MinIO); err != nil {
-		log.Fatalf("initialize minio: %v", err)
+		db.Close()
+		return nil, fmt.Errorf("initialize minio: %w", err)
 	}
-
 	nc, err := nats.Connect(c.NATS.Url)
 	if err != nil {
-		log.Fatalf("connect nats: %v", err)
+		db.Close()
+		return nil, fmt.Errorf("connect nats: %w", err)
 	}
 	embedder, err := embedding.NewEmbedder(c.Embedding)
 	if err != nil {
-		log.Fatalf("initialize embedder: %v", err)
+		closeResources(db, nc)
+		return nil, fmt.Errorf("initialize embedder: %w", err)
 	}
 	llmClient, err := llm.NewClient(c.LLM)
 	if err != nil {
-		log.Fatalf("initialize llm: %v", err)
+		closeResources(db, nc)
+		return nil, fmt.Errorf("initialize llm: %w", err)
 	}
 	milvusStore, err := milvusinfra.NewStore(context.Background(), c.Milvus)
 	if err != nil {
-		log.Fatalf("initialize milvus store: %v", err)
+		closeResources(db, nc)
+		return nil, fmt.Errorf("initialize milvus store: %w", err)
 	}
 
-	return &ServiceContext{
+	serviceContext := &ServiceContext{
 		Config:         c,
 		DB:             db,
 		MinIO:          minioClient,
@@ -86,13 +94,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Embedder:       embedder,
 		LLM:            llmClient,
 		MilvusStore:    milvusStore,
-		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth).Handle,
-		UserRepo:       pgrepo.NewUserRepo(db),
-		SubjectRepo:    pgrepo.NewSubjectRepo(db),
 		DocumentRepo:   pgrepo.NewDocumentRepo(db),
 		ChunkRepo:      pgrepo.NewChunkRepo(db),
 		IndexTaskRepo:  pgrepo.NewIndexTaskRepo(db),
+		AuthMiddleware: middleware.NewAuthMiddleware(c.Auth).Handle,
+		UserRepo:       pgrepo.NewUserRepo(db),
+		SubjectRepo:    pgrepo.NewSubjectRepo(db),
 		ChatRepo:       pgrepo.NewChatRepo(db),
 		AdminRepo:      pgrepo.NewAdminRepo(db),
 	}
+	if c.Metrics.Enabled {
+		serviceContext.Metrics = observability.NewMetrics()
+	}
+	return serviceContext, nil
+}
+
+func closeResources(db *pgxpool.Pool, nc *nats.Conn) {
+	if nc != nil {
+		nc.Close()
+	}
+	if db != nil {
+		db.Close()
+	}
+}
+
+func (s *ServiceContext) Close() {
+	closeResources(s.DB, s.Nats)
 }

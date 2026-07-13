@@ -50,7 +50,7 @@ func TestNewManagerRejectsInvalidConcurrency(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewManager(t.Context(), &svc.ServiceContext{
+			_, err := NewManager(&svc.ServiceContext{
 				Config: config.Config{Worker: tt.worker},
 			})
 			if err == nil {

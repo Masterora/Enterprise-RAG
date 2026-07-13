@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"enterprise-rag/backend/internal/config"
+	"enterprise-rag/backend/internal/infrastructure/observability"
 	"enterprise-rag/backend/internal/infrastructure/parser"
 	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/service/documentchunk"
@@ -18,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/nats-io/nats.go"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -29,56 +32,46 @@ type Manager struct {
 	svcCtx *svc.ServiceContext
 }
 
-func NewManager(ctx context.Context, svcCtx *svc.ServiceContext) (*Manager, error) {
-	if svcCtx.Config.Worker.ParseConcurrency < 1 {
-		return nil, errors.New("worker parse concurrency must be greater than zero")
-	}
-	if svcCtx.Config.Worker.ChunkConcurrency < 1 {
-		return nil, errors.New("worker chunk concurrency must be greater than zero")
-	}
-	if svcCtx.Config.Worker.EmbeddingConcurrency < 1 {
-		return nil, errors.New("worker embedding concurrency must be greater than zero")
-	}
-	if svcCtx.Config.Worker.DeleteConcurrency < 1 {
-		return nil, errors.New("worker delete concurrency must be greater than zero")
+func NewManager(svcCtx *svc.ServiceContext) (*Manager, error) {
+	if err := validateConfig(svcCtx.Config.Worker); err != nil {
+		return nil, err
 	}
 	return &Manager{
 		svcCtx: svcCtx,
 	}, nil
 }
 
+func validateConfig(value config.WorkerConf) error {
+	concurrency := map[string]int{
+		model.TaskTypeParse:     value.ParseConcurrency,
+		model.TaskTypeChunk:     value.ChunkConcurrency,
+		model.TaskTypeEmbedding: value.EmbeddingConcurrency,
+		model.TaskTypeDelete:    value.DeleteConcurrency,
+	}
+	for taskType, value := range concurrency {
+		if value < 1 {
+			return fmt.Errorf("worker task %q concurrency must be greater than zero", taskType)
+		}
+	}
+	return nil
+}
+
 func (m *Manager) Start() error {
-	if err := m.subscribe(
-		model.TaskTypeParse,
-		"parse-workers",
-		m.svcCtx.Config.Worker.ParseConcurrency,
-		m.handleParse,
-	); err != nil {
-		return err
+	handlers := []struct {
+		subject     string
+		queue       string
+		concurrency int
+		handler     nats.MsgHandler
+	}{
+		{subject: model.TaskTypeParse, queue: "parse-workers", concurrency: m.svcCtx.Config.Worker.ParseConcurrency, handler: m.handleParse},
+		{subject: model.TaskTypeChunk, queue: "chunk-workers", concurrency: m.svcCtx.Config.Worker.ChunkConcurrency, handler: m.handleChunk},
+		{subject: model.TaskTypeEmbedding, queue: "embedding-workers", concurrency: m.svcCtx.Config.Worker.EmbeddingConcurrency, handler: m.handleEmbedding},
+		{subject: model.TaskTypeDelete, queue: "delete-workers", concurrency: m.svcCtx.Config.Worker.DeleteConcurrency, handler: m.handleDelete},
 	}
-	if err := m.subscribe(
-		model.TaskTypeChunk,
-		"chunk-workers",
-		m.svcCtx.Config.Worker.ChunkConcurrency,
-		m.handleChunk,
-	); err != nil {
-		return err
-	}
-	if err := m.subscribe(
-		model.TaskTypeEmbedding,
-		"embedding-workers",
-		m.svcCtx.Config.Worker.EmbeddingConcurrency,
-		m.handleEmbedding,
-	); err != nil {
-		return err
-	}
-	if err := m.subscribe(
-		model.TaskTypeDelete,
-		"delete-workers",
-		m.svcCtx.Config.Worker.DeleteConcurrency,
-		m.handleDelete,
-	); err != nil {
-		return err
+	for _, definition := range handlers {
+		if err := m.subscribe(definition.subject, definition.queue, definition.concurrency, definition.handler); err != nil {
+			return err
+		}
 	}
 	return m.svcCtx.Nats.Flush()
 }
@@ -93,25 +86,40 @@ func (m *Manager) subscribe(subject, queue string, concurrency int, handler nats
 }
 
 func (m *Manager) handleParse(msg *nats.Msg) {
-	m.run(msg.Data, model.TaskTypeParse, m.parseDocument)
+	m.run(msg, model.TaskTypeParse, m.parseDocument)
 }
 
 func (m *Manager) handleChunk(msg *nats.Msg) {
-	m.run(msg.Data, model.TaskTypeChunk, m.chunkDocument)
+	m.run(msg, model.TaskTypeChunk, m.chunkDocument)
 }
 
 func (m *Manager) handleEmbedding(msg *nats.Msg) {
-	m.run(msg.Data, model.TaskTypeEmbedding, m.embedDocument)
+	m.run(msg, model.TaskTypeEmbedding, m.embedDocument)
 }
 
 func (m *Manager) handleDelete(msg *nats.Msg) {
-	m.run(msg.Data, model.TaskTypeDelete, m.deleteDocument)
+	m.run(msg, model.TaskTypeDelete, m.deleteDocument)
 }
 
-func (m *Manager) run(data []byte, taskType string, fn func(context.Context, *task.Message) error) {
-	ctx := context.Background()
+func (m *Manager) run(messageEnvelope *nats.Msg, taskType string, fn func(context.Context, *task.Message) error) {
+	ctx := taskqueue.ExtractContext(context.Background(), messageEnvelope)
+	ctx, taskSpan := observability.StartSpan(ctx, "worker.task",
+		attribute.String("worker.task_type", taskType),
+	)
+	startedAt := time.Now()
+	status := "error"
+	m.svcCtx.Metrics.WorkerStarted(taskType)
+	defer func() {
+		m.svcCtx.Metrics.WorkerFinished(taskType)
+		m.svcCtx.Metrics.ObserveWorker(taskType, status, time.Since(startedAt))
+		observability.EndSpanWithStatus(taskSpan, status)
+	}()
 	var message task.Message
-	if err := json.Unmarshal(data, &message); err != nil {
+	if messageEnvelope == nil {
+		return
+	}
+	if err := json.Unmarshal(messageEnvelope.Data, &message); err != nil {
+		taskSpan.RecordError(err)
 		return
 	}
 	if message.TaskID == "" || message.DocID == "" {
@@ -119,10 +127,13 @@ func (m *Manager) run(data []byte, taskType string, fn func(context.Context, *ta
 	}
 
 	if err := m.svcCtx.IndexTaskRepo.UpdateStatus(ctx, message.TaskID, model.TaskStatusRunning, ""); err != nil {
+		taskSpan.RecordError(err)
 		return
 	}
 	if err := fn(ctx, &message); err != nil {
+		taskSpan.RecordError(err)
 		if m.scheduleRetry(ctx, taskType, &message, err) {
+			status = "retry"
 			return
 		}
 		documentStatus := model.DocumentStatusFailed
@@ -131,7 +142,9 @@ func (m *Manager) run(data []byte, taskType string, fn func(context.Context, *ta
 		}
 		_ = m.svcCtx.DocumentRepo.UpdateStatus(ctx, message.DocID, documentStatus, err.Error())
 		_ = m.svcCtx.IndexTaskRepo.UpdateStatus(ctx, message.TaskID, model.TaskStatusFailed, err.Error())
+		return
 	}
+	status = "success"
 }
 
 func (m *Manager) scheduleRetry(ctx context.Context, taskType string, message *task.Message, taskErr error) bool {
@@ -143,7 +156,10 @@ func (m *Manager) scheduleRetry(ctx context.Context, taskType string, message *t
 		return false
 	}
 	if documentStatus, ok := retryPendingDocumentStatus(taskType); ok {
-		_ = m.svcCtx.DocumentRepo.UpdateStatus(ctx, message.DocID, documentStatus, "")
+		if err := m.svcCtx.DocumentRepo.ResetStatusForRetry(ctx, message.DocID, documentStatus); err != nil {
+			_ = m.svcCtx.IndexTaskRepo.UpdateStatus(ctx, message.TaskID, model.TaskStatusFailed, err.Error())
+			return false
+		}
 	}
 	if taskType == model.TaskTypeParse {
 		_ = m.svcCtx.DocumentRepo.AddParseLog(ctx, &model.DocumentParseLog{
@@ -154,9 +170,10 @@ func (m *Manager) scheduleRetry(ctx context.Context, taskType string, message *t
 			CreatedAt: time.Now(),
 		})
 	}
+	retryCtx := context.WithoutCancel(ctx)
 	go func() {
 		time.Sleep(automaticRetryDelay)
-		_ = taskqueue.Publish(m.svcCtx.Nats, taskType, message.TaskID, message.DocID, message.ProcessingMode)
+		_ = taskqueue.Publish(retryCtx, m.svcCtx.Nats, taskType, message.TaskID, message.DocID, message.ProcessingMode)
 	}()
 	return true
 }
@@ -239,7 +256,7 @@ func (m *Manager) parseDocument(ctx context.Context, message *task.Message) erro
 	if err := m.svcCtx.DocumentRepo.AddParseLog(ctx, parseLog); err != nil {
 		return err
 	}
-	if err := m.svcCtx.DocumentRepo.UpdateParseResult(ctx, doc.ID, model.DocumentStatusParsed, plainText, metadata, ""); err != nil {
+	if err := m.svcCtx.DocumentRepo.CompleteParse(ctx, doc.ID, plainText, metadata); err != nil {
 		return err
 	}
 	if err := m.svcCtx.IndexTaskRepo.UpdateStatus(ctx, message.TaskID, model.TaskStatusSuccess, ""); err != nil {
@@ -259,7 +276,7 @@ func (m *Manager) parseDocument(ctx context.Context, message *task.Message) erro
 	if err := m.svcCtx.IndexTaskRepo.Create(ctx, nextTask); err != nil {
 		return err
 	}
-	return taskqueue.Publish(m.svcCtx.Nats, model.TaskTypeChunk, nextTask.ID, doc.ID, "")
+	return taskqueue.Publish(ctx, m.svcCtx.Nats, model.TaskTypeChunk, nextTask.ID, doc.ID, "")
 }
 
 func (m *Manager) chunkDocument(ctx context.Context, message *task.Message) error {
@@ -298,7 +315,7 @@ func (m *Manager) chunkDocument(ctx context.Context, message *task.Message) erro
 	if err := m.svcCtx.IndexTaskRepo.Create(ctx, nextTask); err != nil {
 		return err
 	}
-	return taskqueue.Publish(m.svcCtx.Nats, model.TaskTypeEmbedding, nextTask.ID, doc.ID, "")
+	return taskqueue.Publish(ctx, m.svcCtx.Nats, model.TaskTypeEmbedding, nextTask.ID, doc.ID, "")
 }
 
 func (m *Manager) embedDocument(ctx context.Context, message *task.Message) error {
@@ -323,7 +340,11 @@ func (m *Manager) embedDocument(ctx context.Context, message *task.Message) erro
 		texts = append(texts, buildEmbeddingText(chunk))
 	}
 
-	vectors, err := m.svcCtx.Embedder.Embed(ctx, texts)
+	embeddingStartedAt := time.Now()
+	embeddingCtx := m.svcCtx.Metrics.ModelUsageContext(ctx, "embedding", "document_embedding",
+		m.svcCtx.Config.Embedding.Provider)
+	vectors, err := m.svcCtx.Embedder.Embed(embeddingCtx, texts)
+	m.svcCtx.Metrics.ObserveModel("embedding", "document_embedding", m.svcCtx.Config.Embedding.Provider, workerOutcome(err), time.Since(embeddingStartedAt))
 	if err != nil {
 		return err
 	}
@@ -337,6 +358,16 @@ func (m *Manager) embedDocument(ctx context.Context, message *task.Message) erro
 		return err
 	}
 	return m.svcCtx.IndexTaskRepo.UpdateStatus(ctx, message.TaskID, model.TaskStatusSuccess, "")
+}
+
+func workerOutcome(err error) string {
+	if err == nil {
+		return "success"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "error"
 }
 
 func (m *Manager) deleteDocument(ctx context.Context, message *task.Message) error {

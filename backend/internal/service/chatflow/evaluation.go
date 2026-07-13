@@ -8,18 +8,6 @@ import (
 	"enterprise-rag/backend/internal/types"
 )
 
-func RouteMetrics(route QueryRoute, expectedRoute string, startedAt time.Time, thresholds config.EvaluationConf) types.RetrievalMetrics {
-	expectedRoute = strings.TrimSpace(expectedRoute)
-	metrics := types.RetrievalMetrics{
-		Route:        string(route),
-		RouteCorrect: expectedRoute == "" || strings.EqualFold(expectedRoute, string(route)),
-		LatencyMS:    time.Since(startedAt).Milliseconds(),
-	}
-	metrics.EvaluationPassed = (expectedRoute == "" || metrics.RouteCorrect) &&
-		(thresholds.MaxLatencyMS <= 0 || metrics.LatencyMS <= thresholds.MaxLatencyMS)
-	return metrics
-}
-
 func CompleteAnswerMetrics(
 	metrics types.RetrievalMetrics,
 	answer, expectedOutcome string,
@@ -28,7 +16,7 @@ func CompleteAnswerMetrics(
 	thresholds config.EvaluationConf,
 ) types.RetrievalMetrics {
 	metrics.LatencyMS = time.Since(startedAt).Milliseconds()
-	metrics.Answered = strings.TrimSpace(answer) != "" && strings.TrimSpace(answer) != "无法确定"
+	metrics.Answered = strings.TrimSpace(answer) != "" && !IsNoAnswer(answer)
 	metrics.CitationCount = citationCount
 	switch strings.ToLower(strings.TrimSpace(expectedOutcome)) {
 	case "answer":
@@ -43,4 +31,14 @@ func CompleteAnswerMetrics(
 		metrics.EvaluationPassed = false
 	}
 	return metrics
+}
+
+func IsNoAnswer(answer string) bool {
+	normalized := strings.Trim(strings.TrimSpace(answer), "。.!！ \n\t")
+	switch strings.ToLower(normalized) {
+	case "无法确定", "unable to determine", "cannot determine", "判断できません":
+		return true
+	default:
+		return false
+	}
 }

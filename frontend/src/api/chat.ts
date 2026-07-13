@@ -8,6 +8,18 @@ export interface ExternalLink {
   snippet: string
 }
 
+export interface AgentStep {
+  id: string
+  kind: string
+  title: string
+  tool: string
+  state: string
+  iteration: number
+  status: string
+  detail: string
+  duration_ms: number
+}
+
 export interface StoredChatMessage {
   id: string
   question: string
@@ -18,6 +30,7 @@ export interface StoredChatMessage {
   model_label: string
   model_id: string
   web_search: boolean
+  agent_steps: AgentStep[]
   created_at: string
 }
 
@@ -59,11 +72,12 @@ export async function deleteChatSession(id: string) {
 export interface ChatStreamHandlers {
   onEvent?: () => void
   onStatus?: (message: string) => void
+  onAgentStep?: (step: AgentStep) => void
   onSources?: (chunks: RetrievalChunk[]) => void
   onWebSources?: (links: ExternalLink[]) => void
   onMetrics?: (metrics: RetrievalMetrics) => void
   onDelta?: (content: string) => void
-  onDone?: () => void
+  onDone?: (answer: string) => void
   onError?: (message: string) => void
 }
 
@@ -172,10 +186,34 @@ function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
     expected_count?: number
     recall_hit_count?: number
     recall_at_k?: number
+    id?: string
+    kind?: string
+    title?: string
+    tool?: string
+    state?: string
+    iteration?: number
+    status?: string
+    detail?: string
+    duration_ms?: number
+    answer?: string
   }
 
   if (event === 'status' && parsed.message) {
     handlers.onStatus?.(parsed.message)
+    return false
+  }
+  if (event === 'agent_step' && parsed.id && parsed.kind && parsed.title && parsed.status) {
+    handlers.onAgentStep?.({
+      id: parsed.id,
+      kind: parsed.kind,
+      title: parsed.title,
+      tool: parsed.tool ?? '',
+      state: parsed.state ?? '',
+      iteration: parsed.iteration ?? 0,
+      status: parsed.status,
+      detail: parsed.detail ?? '',
+      duration_ms: parsed.duration_ms ?? 0,
+    })
     return false
   }
   if (event === 'sources') {
@@ -195,7 +233,7 @@ function handleStreamEvent(rawEvent: string, handlers: ChatStreamHandlers) {
     return false
   }
   if (event === 'done') {
-    handlers.onDone?.()
+    handlers.onDone?.(parsed.answer ?? '')
     return true
   }
   if (event === 'error') {

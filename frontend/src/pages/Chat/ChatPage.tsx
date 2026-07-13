@@ -1,4 +1,4 @@
-import { Button, message } from 'antd'
+import { App as AntdApp, Button } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type UIEvent } from 'react'
 import {
@@ -25,12 +25,11 @@ import {
 import { SessionList } from './components/SessionList'
 import { RetrievalEvaluationModal } from './components/RetrievalEvaluationModal'
 import { useSubjectOverview } from './hooks/useSubjectOverview'
-import { askWithRetry as streamAskWithRetry, classifyChatFailure, localizeChatStatus } from './streaming'
+import { classifyChatFailure, localizeChatStatus, streamAnswer } from './streaming'
 import type { ChatMessage, ChatSession } from './types'
 import { buildSessionTitle } from './utils'
 import './chat.css'
 
-const MAX_ASK_ATTEMPTS = 3
 const ASK_TIMEOUT_MS = 30_000
 const DEFAULT_CHAT_TOP_K = 5
 const CHAT_TOP_K = Math.max(1, Number(import.meta.env.VITE_CHAT_TOP_K ?? DEFAULT_CHAT_TOP_K))
@@ -61,6 +60,7 @@ function mapStoredSession(session: StoredChatSession, doneStatus: string, webSea
       modelID: item.model_id,
       webSearch: item.web_search,
       processSteps: item.web_search ? [webSearchStatus] : [],
+      agentSteps: item.agent_steps ?? [],
       startedAt: Date.parse(item.created_at),
       finishedAt: Date.parse(item.created_at),
       loading: false,
@@ -69,6 +69,7 @@ function mapStoredSession(session: StoredChatSession, doneStatus: string, webSea
 }
 
 export function ChatPage() {
+	const { message } = AntdApp.useApp()
   const [subjects, setSubjects] = useState<SubjectInfo[]>([])
   const [subjectsLoaded, setSubjectsLoaded] = useState(false)
   const [subjectID, setSubjectID] = useState('')
@@ -133,7 +134,7 @@ export function ChatPage() {
       }
     }
     void loadSessions()
-  }, [t])
+  }, [message, t])
 
   useEffect(() => {
     selectedLLMRef.current = selectedLLM
@@ -152,7 +153,7 @@ export function ChatPage() {
     }
 
     void loadSubjects()
-  }, [t])
+  }, [message, t])
 
   useEffect(() => {
     if (sessions.length === 0 || activeSessionID) {
@@ -398,6 +399,7 @@ export function ChatPage() {
             ...(webSearch ? [t('chat.process.webSearchEnabled')] : []),
             t('chat.process.questionSubmitted'),
           ],
+          agentSteps: [],
           startedAt: nextTimestamp,
           loading: true,
         },
@@ -438,7 +440,7 @@ export function ChatPage() {
     currentLLMModel: string,
     currentWebSearch: boolean,
   ) {
-    return streamAskWithRetry({
+    return streamAnswer({
       sessionID,
       messageID,
       question: currentQuestion,
@@ -447,13 +449,8 @@ export function ChatPage() {
       llmModel: currentLLMModel,
       webSearch: currentWebSearch,
       topK: CHAT_TOP_K,
-      maxAskAttempts: MAX_ASK_ATTEMPTS,
       askTimeoutMS: ASK_TIMEOUT_MS,
       labels: {
-        model: (model) => t('chat.process.model', { model }),
-        webSearchEnabled: t('chat.process.webSearchEnabled'),
-        retrying: (attempt) => t('chat.retrying', { attempt }),
-        retryNotice: (attempt) => t('chat.retryNotice', { attempt }),
         rewriteDone: (query) => t('chat.process.rewriteDone', { query }),
         rewriteSkipped: t('chat.process.rewriteSkipped'),
         retrievalDone: (returned, candidates) => t('chat.process.retrievalDone', { returned, candidates }),
@@ -463,15 +460,32 @@ export function ChatPage() {
         webSourcesDone: (count) => t('chat.process.webSourcesDone', { count }),
         answerStreaming: t('chat.process.answerStreaming'),
         finished: t('chat.process.finished'),
-        retryPrepare: t('chat.retryPrepare'),
         done: t('chat.done'),
       },
       callbacks: {
         updateMessage,
         appendProcessStep,
         appendAnswer,
+        updateAgentStep: (sessionID, messageID, step) => {
+          updateSession(sessionID, (session) => ({
+            ...session,
+            updatedAt: Date.now(),
+            messages: session.messages.map((item) => {
+              if (item.id !== messageID) {
+                return item
+              }
+              const current = item.agentSteps ?? []
+              const exists = current.some((candidate) => candidate.id === step.id)
+              return {
+                ...item,
+                agentSteps: exists
+                  ? current.map((candidate) => candidate.id === step.id ? step : candidate)
+                  : [...current, step],
+              }
+            }),
+          }))
+        },
       },
-      classifyChatFailure: (error) => classifyChatFailure(error, t),
 		localizeStatus: (status) => localizeChatStatus(status, t),
     })
   }

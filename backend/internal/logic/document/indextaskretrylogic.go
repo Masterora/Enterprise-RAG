@@ -51,7 +51,7 @@ func (l *IndexTaskRetryLogic) IndexTaskRetry(req *types.IndexTaskRetryReq) (resp
 	if !ok {
 		return nil, errors.New("unsupported task type")
 	}
-	if err := l.svcCtx.DocumentRepo.UpdateStatus(l.ctx, task.DocID, documentStatus, ""); err != nil {
+	if err := l.svcCtx.DocumentRepo.ResetStatusForRetry(l.ctx, task.DocID, documentStatus); err != nil {
 		_ = l.svcCtx.IndexTaskRepo.UpdateStatus(l.ctx, task.ID, model.TaskStatusFailed, err.Error())
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (l *IndexTaskRetryLogic) IndexTaskRetry(req *types.IndexTaskRetryReq) (resp
 			processingMode = taskmsg.NormalizeProcessingMode(metadata.ProcessingMode)
 		}
 	}
-	if err := taskqueue.Publish(l.svcCtx.Nats, task.TaskType, task.ID, task.DocID, processingMode); err != nil {
+	if err := taskqueue.Publish(l.ctx, l.svcCtx.Nats, task.TaskType, task.ID, task.DocID, processingMode); err != nil {
 		_ = l.svcCtx.IndexTaskRepo.UpdateStatus(l.ctx, task.ID, model.TaskStatusFailed, err.Error())
 		failedStatus := model.DocumentStatusFailed
 		if task.TaskType == model.TaskTypeDelete {

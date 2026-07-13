@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"enterprise-rag/backend/internal/infrastructure/observability"
 	"enterprise-rag/backend/internal/types"
 )
 
@@ -22,6 +23,25 @@ type CompatibleClient struct {
 	model   string
 	baseURL string
 	client  *http.Client
+}
+
+type responseUsage struct {
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	Cost             float64 `json:"cost"`
+}
+
+func reportUsage(ctx context.Context, usage responseUsage) {
+	if usage.PromptTokens == 0 && usage.CompletionTokens == 0 && usage.TotalTokens == 0 && usage.Cost == 0 {
+		return
+	}
+	observability.ReportModelUsage(ctx, observability.ModelUsage{
+		InputTokens:  usage.PromptTokens,
+		OutputTokens: usage.CompletionTokens,
+		TotalTokens:  usage.TotalTokens,
+		CostUSD:      usage.Cost,
+	})
 }
 
 func NewCompatibleClient(apiKey, model, baseURL string) *CompatibleClient {
@@ -88,10 +108,12 @@ func (c *CompatibleClient) Generate(ctx context.Context, prompt string, webSearc
 				Annotations []urlAnnotation `json:"annotations"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage responseUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		return "", err
 	}
+	reportUsage(ctx, parsed.Usage)
 	if len(parsed.Choices) == 0 {
 		return "", errors.New("llm response choices is empty")
 	}
@@ -156,10 +178,12 @@ func (c *CompatibleClient) SearchWeb(ctx context.Context, query string) ([]types
 				Annotations []urlAnnotation `json:"annotations"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage responseUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		return nil, err
 	}
+	reportUsage(ctx, parsed.Usage)
 	if len(parsed.Choices) == 0 {
 		return nil, errors.New("llm web search response choices is empty")
 	}
@@ -179,6 +203,7 @@ func (c *CompatibleClient) GenerateStream(ctx context.Context, prompt string, we
 		},
 		"max_tokens":      800,
 		"stream":          true,
+		"stream_options":  map[string]bool{"include_usage": true},
 		"enable_thinking": false,
 	}
 	if err := c.enableWebSearch(payload, webSearch); err != nil {
@@ -214,7 +239,16 @@ func (c *CompatibleClient) GenerateStream(ctx context.Context, prompt string, we
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	annotations := make([]urlAnnotation, 0)
+	var usage responseUsage
+	usageReported := false
+	reportStreamUsage := func() {
+		if !usageReported {
+			reportUsage(ctx, usage)
+			usageReported = true
+		}
+	}
 	flushAnnotations := func() error {
+		reportStreamUsage()
 		citations := appendURLCitations("", annotations)
 		if citations == "" {
 			return nil
@@ -240,33 +274,30 @@ func (c *CompatibleClient) GenerateStream(ctx context.Context, prompt string, we
 					Content     string          `json:"content"`
 					Annotations []urlAnnotation `json:"annotations"`
 				} `json:"delta"`
-				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
+			Usage responseUsage `json:"usage"`
 		}
 		if err := json.Unmarshal([]byte(data), &parsed); err != nil {
 			return err
 		}
-		shouldStop := false
+		if parsed.Usage.PromptTokens > 0 || parsed.Usage.CompletionTokens > 0 || parsed.Usage.TotalTokens > 0 || parsed.Usage.Cost > 0 {
+			usage = parsed.Usage
+		}
 		for _, choice := range parsed.Choices {
 			annotations = append(annotations, choice.Delta.Annotations...)
 			if choice.Delta.Content == "" {
-				if choice.FinishReason != "" {
-					shouldStop = true
-				}
 				continue
 			}
 			if err := onDelta(choice.Delta.Content); err != nil {
 				return err
 			}
-			if choice.FinishReason != "" {
-				shouldStop = true
-			}
-		}
-		if shouldStop {
-			return flushAnnotations()
 		}
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		reportStreamUsage()
+		return err
+	}
+	return flushAnnotations()
 }
 
 type urlAnnotation struct {

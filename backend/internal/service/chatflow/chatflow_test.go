@@ -4,57 +4,18 @@ import (
 	"strings"
 	"testing"
 
-	"enterprise-rag/backend/internal/config"
+	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/types"
 )
 
-func TestBuildPromptIncludesGroundingRules(t *testing.T) {
-	prompt := BuildPrompt(config.PromptConf{}, "Jaeger", []types.RetrievalChunk{{
-		DocName: "05_trace_jaeger_observability.txt",
-		Section: "三、在 Jaeger 中应该看什么",
-		Content: "最常看的内容包括 Trace 列表、Duration、Spans、Service、Tags、Logs。",
-	}}, []types.ExternalLink{{
-		Title:   "Jaeger overview",
-		URL:     "https://example.com/jaeger",
-		Snippet: "Jaeger is an open source distributed tracing system.",
-	}}, true)
-
-	for _, expected := range []string{
-		"正式、完整、信息充分",
-		"忽略仅是目录、测试题、清单、术语表之类的弱相关内容",
-		"[外链1]",
-		"[引用1]",
-	} {
-		if !strings.Contains(prompt, expected) {
-			t.Fatalf("prompt missing expected text %q\n%s", expected, prompt)
+func TestIsNoAnswerSupportsInterfaceLanguages(t *testing.T) {
+	for _, answer := range []string{"无法确定。", "Unable to determine.", "Cannot determine", "判断できません。"} {
+		if !IsNoAnswer(answer) {
+			t.Fatalf("expected no-answer response: %q", answer)
 		}
 	}
-}
-
-func TestParseRouteResponse(t *testing.T) {
-	tests := []struct {
-		response string
-		want     QueryAnalysis
-		ok       bool
-	}{
-		{response: `{"route":"overview","search_query":""}`, want: QueryAnalysis{Route: QueryRouteOverview}, ok: true},
-		{response: "```json\n{\"route\":\"navigation\",\"search_query\":\"\"}\n```", want: QueryAnalysis{Route: QueryRouteNavigation}, ok: true},
-		{response: `{"route":"unknown"}`, ok: false},
-		{response: "overview", ok: false},
-	}
-
-	for _, tt := range tests {
-		got, ok := parseRouteResponse(tt.response)
-		if got != tt.want || ok != tt.ok {
-			t.Fatalf("parseRouteResponse(%q) = (%q, %v), want (%q, %v)", tt.response, got, ok, tt.want, tt.ok)
-		}
-	}
-}
-
-func TestBuildRoutePromptUsesCustomTemplate(t *testing.T) {
-	prompt := BuildRoutePrompt(config.PromptConf{RouteTemplate: "判断={{question}}"}, "能干什么")
-	if prompt != "判断=能干什么" {
-		t.Fatalf("unexpected route prompt: %q", prompt)
+	if IsNoAnswer("资料显示该流程可执行。") {
+		t.Fatal("valid answer was classified as no-answer")
 	}
 }
 
@@ -100,34 +61,26 @@ func TestFormatOverviewAnswerHighlightsListTitle(t *testing.T) {
 	}
 }
 
-func TestBuildOverviewLeadIncludesReferenceSuffix(t *testing.T) {
-	got := buildOverviewLead("ut", 4, []string{"MQTT 通信协议", "E语言规范"}, []types.RetrievalChunk{{}, {}, {}})
-	want := "知识库“ut”当前共包含 4 篇已索引文档，主要覆盖 MQTT 通信协议、E语言规范 等方向。 [引用1] [引用2] [引用3]"
-	if got != want {
-		t.Fatalf("buildOverviewLead() = %q, want %q", got, want)
+func TestOverviewChunkScorePrefersMeaningfulSection(t *testing.T) {
+	meaningful := overviewChunkScore("通信协议架构", strings.Repeat("内容", 200), 3)
+	weak := overviewChunkScore("2.3", strings.Repeat("内容", 200), 0)
+	if meaningful <= weak {
+		t.Fatalf("meaningful section score %.2f must exceed weak section score %.2f", meaningful, weak)
 	}
 }
 
-func TestBuildPromptUsesCustomTemplate(t *testing.T) {
-	prompt := BuildPrompt(config.PromptConf{
-		AnswerTemplate: "问题={{question}}\n资料={{knowledge_chunks}}",
-	}, "测试问题", []types.RetrievalChunk{{
-		DocName: "a.md",
-		Section: "概述",
-		Content: "测试内容",
-	}}, nil, false)
-
-	for _, expected := range []string{"问题=测试问题", "资料=[引用1]", "文档：a.md", "内容：测试内容"} {
-		if !strings.Contains(prompt, expected) {
-			t.Fatalf("custom prompt missing %q\n%s", expected, prompt)
-		}
+func TestOverviewSummaryUsesDocumentNameAndStructuredContext(t *testing.T) {
+	summary := &overviewDocSummary{
+		document: model.Document{Filename: "enterprise-protocol.docx"},
+		sections: []string{"2.3", "通信架构", "消息格式"},
+		chunk:    &types.RetrievalChunk{Content: "本文规定平台与终端之间的通信流程和消息结构。"},
 	}
-}
-
-func TestBuildPromptUsesExplanationTemplate(t *testing.T) {
-	prompt := BuildPrompt(config.PromptConf{ExplanationTemplate: "解释={{question}}"}, "为什么先删除向量？", nil, nil, false)
-	if prompt != "解释=为什么先删除向量？" {
-		t.Fatalf("unexpected prompt: %q", prompt)
+	if title := buildOverviewTitle(summary); title != "enterprise-protocol" {
+		t.Fatalf("unexpected title: %s", title)
+	}
+	description := buildOverviewDescription(summary)
+	if !strings.Contains(description, "通信架构、消息格式") || !strings.Contains(description, "通信流程") {
+		t.Fatalf("unexpected description: %s", description)
 	}
 }
 
@@ -138,5 +91,19 @@ func TestReferencedSourcesKeepsOnlyUsedCitations(t *testing.T) {
 	}
 	if len(links) != 1 || links[0].URL != "https://example.com" {
 		t.Fatalf("unexpected links: %#v", links)
+	}
+}
+
+func TestRemapReferencedSourcesKeepsAnswerAndSourcesAligned(t *testing.T) {
+	answer, chunks, links := RemapReferencedSources(
+		"结论一。[引用4] 结论二。[引用2][外链3]",
+		[]types.RetrievalChunk{{ID: "1"}, {ID: "2"}, {ID: "3"}, {ID: "4"}},
+		[]types.ExternalLink{{URL: "1"}, {URL: "2"}, {URL: "3"}},
+	)
+	if answer != "结论一。[引用1] 结论二。[引用2][外链1]" {
+		t.Fatalf("unexpected remapped answer: %s", answer)
+	}
+	if len(chunks) != 2 || chunks[0].ID != "4" || chunks[1].ID != "2" || len(links) != 1 || links[0].URL != "3" {
+		t.Fatalf("unexpected remapped sources: chunks=%#v links=%#v", chunks, links)
 	}
 }

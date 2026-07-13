@@ -1,4 +1,4 @@
-import type { ExternalLink } from '../../api/chat'
+import type { AgentStep, ExternalLink } from '../../api/chat'
 import type { RetrievalChunk, RetrievalMetrics } from '../../api/retrieval'
 
 export type ChatMessage = {
@@ -13,6 +13,7 @@ export type ChatMessage = {
   modelID?: string
   webSearch?: boolean
   processSteps: string[]
+  agentSteps: AgentStep[]
   startedAt?: number
   finishedAt?: number
   errorReason?: string

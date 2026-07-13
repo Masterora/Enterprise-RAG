@@ -29,29 +29,39 @@ func (s *Service) rewriteQuery(ctx context.Context, query, provider, model strin
 	}
 	prompt = strings.ReplaceAll(prompt, "{{question}}", query)
 
-	rewriteLLM, err := s.resolveRewriteLLM(provider, model)
-	if err != nil {
-		return "", err
+	rewriteLLM := s.svcCtx.LLM
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
+	if provider != "" || model != "" {
+		override := config.ProviderConf{Provider: provider, Model: model, ApiKey: s.svcCtx.Config.LLM.ApiKey, BaseURL: s.svcCtx.Config.LLM.BaseURL}
+		if override.Provider == "" {
+			override.Provider = s.svcCtx.Config.LLM.Provider
+		}
+		if override.Model == "" {
+			override.Model = s.svcCtx.Config.LLM.Model
+		}
+		var err error
+		rewriteLLM, err = llm.NewClient(override)
+		if err != nil {
+			return "", err
+		}
 	}
+	startedAt := time.Now()
+	rewriteCtx = s.svcCtx.Metrics.ModelUsageContext(rewriteCtx, "llm", "query_rewrite",
+		resolvedProvider(provider, s.svcCtx.Config.LLM.Provider))
 	rewritten, err := rewriteLLM.Generate(rewriteCtx, prompt, false)
+	s.svcCtx.Metrics.ObserveModel("llm", "query_rewrite", resolvedProvider(provider, s.svcCtx.Config.LLM.Provider), metricOutcome(err), time.Since(startedAt))
 	if err != nil {
 		return "", err
 	}
 	return sanitizeRewrittenQuery(query, rewritten), nil
 }
 
-func (s *Service) resolveRewriteLLM(provider, model string) (llm.Client, error) {
-	override := config.ProviderConf{Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model), ApiKey: s.svcCtx.Config.LLM.ApiKey, BaseURL: s.svcCtx.Config.LLM.BaseURL}
-	if override.Provider == "" {
-		override.Provider = s.svcCtx.Config.LLM.Provider
+func resolvedProvider(requested, fallback string) string {
+	if requested = strings.TrimSpace(requested); requested != "" {
+		return requested
 	}
-	if override.Model == "" {
-		override.Model = s.svcCtx.Config.LLM.Model
-	}
-	if strings.EqualFold(override.Provider, strings.TrimSpace(s.svcCtx.Config.LLM.Provider)) && override.Model == strings.TrimSpace(s.svcCtx.Config.LLM.Model) {
-		return s.svcCtx.LLM, nil
-	}
-	return llm.NewClient(override)
+	return fallback
 }
 
 func sanitizeRewrittenQuery(original, rewritten string) string {

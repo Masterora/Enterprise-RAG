@@ -8,11 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"enterprise-rag/backend/internal/infrastructure/observability"
 	"enterprise-rag/backend/internal/model"
 	"enterprise-rag/backend/internal/svc"
 	"enterprise-rag/backend/internal/types"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type Service struct {
@@ -48,6 +50,18 @@ func (s *Service) Search(ctx context.Context, userID, subjectID, query string, t
 
 func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, query string, options SearchOptions) ([]types.RetrievalChunk, types.RetrievalMetrics, error) {
 	startedAt := time.Now()
+	productionStatus := "error"
+	productionCandidates := 0
+	productionReturned := 0
+	ctx, retrievalSpan := observability.StartSpan(ctx, "retrieval.search")
+	defer func() {
+		s.svcCtx.Metrics.ObserveRetrieval(productionStatus, time.Since(startedAt), productionCandidates, productionReturned)
+		retrievalSpan.SetAttributes(
+			attribute.Int("retrieval.candidates", productionCandidates),
+			attribute.Int("retrieval.returned", productionReturned),
+		)
+		observability.EndSpanWithStatus(retrievalSpan, productionStatus)
+	}()
 	subjectID = strings.TrimSpace(subjectID)
 	query = strings.TrimSpace(query)
 	if subjectID == "" || query == "" {
@@ -90,7 +104,9 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 		if err := notifyStage(options.OnStage, "retrieval.rewrite.start"); err != nil {
 			return nil, metrics, err
 		}
-		rewritten, err := s.rewriteQuery(ctx, query, options.LLMProvider, options.LLMModel)
+		rewriteCtx, rewriteSpan := observability.StartSpan(ctx, "retrieval.query_rewrite")
+		rewritten, err := s.rewriteQuery(rewriteCtx, query, options.LLMProvider, options.LLMModel)
+		observability.EndSpan(rewriteSpan, err)
 		if err != nil {
 			logx.WithContext(ctx).Errorf("query rewrite failed, fallback to original query: subject_id=%s err=%v", subjectID, err)
 			if err := notifyStage(options.OnStage, "retrieval.rewrite.fallback"); err != nil {
@@ -125,7 +141,15 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 	if err := notifyStage(options.OnStage, "retrieval.embedding.start"); err != nil {
 		return nil, metrics, err
 	}
-	vectors, err := s.svcCtx.Embedder.Embed(ctx, plan.queries)
+	embeddingStartedAt := time.Now()
+	embeddingCtx, embeddingSpan := observability.StartSpan(ctx, "retrieval.embedding",
+		attribute.Int("retrieval.sub_queries", len(plan.queries)),
+	)
+	embeddingCtx = s.svcCtx.Metrics.ModelUsageContext(embeddingCtx, "embedding", "query_embedding",
+		s.svcCtx.Config.Embedding.Provider)
+	vectors, err := s.svcCtx.Embedder.Embed(embeddingCtx, plan.queries)
+	observability.EndSpan(embeddingSpan, err)
+	s.svcCtx.Metrics.ObserveModel("embedding", "query_embedding", s.svcCtx.Config.Embedding.Provider, metricOutcome(err), time.Since(embeddingStartedAt))
 	if err != nil {
 		return nil, metrics, err
 	}
@@ -136,10 +160,14 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 	if err := notifyStage(options.OnStage, "retrieval.vector.start"); err != nil {
 		return nil, metrics, err
 	}
+	vectorCtx, vectorSpan := observability.StartSpan(ctx, "retrieval.vector_search",
+		attribute.Int("retrieval.candidate_limit", candidateTopK),
+	)
 	vectorMatches := make(map[string]model.RetrievalChunk)
 	for _, vector := range vectors {
-		chunks, err := s.svcCtx.MilvusStore.Search(ctx, subjectID, vector, candidateTopK)
+		chunks, err := s.svcCtx.MilvusStore.Search(vectorCtx, subjectID, vector, candidateTopK)
 		if err != nil {
+			observability.EndSpan(vectorSpan, err)
 			return nil, metrics, err
 		}
 		for _, chunk := range chunks {
@@ -148,6 +176,8 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 			}
 		}
 	}
+	vectorSpan.SetAttributes(attribute.Int("retrieval.vector_matches", len(vectorMatches)))
+	observability.EndSpan(vectorSpan, nil)
 
 	vectorChunks := make([]types.RetrievalChunk, 0, len(vectorMatches))
 	for _, chunk := range vectorMatches {
@@ -182,7 +212,12 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 	if err := notifyStage(options.OnStage, "retrieval.keyword.start"); err != nil {
 		return nil, metrics, err
 	}
-	keywords, err := s.keywordSearch(ctx, subjectID, strings.Join(plan.queries, " "), candidateTopK)
+	keywordCtx, keywordSpan := observability.StartSpan(ctx, "retrieval.keyword_search",
+		attribute.Int("retrieval.candidate_limit", candidateTopK),
+	)
+	keywords, err := s.keywordSearch(keywordCtx, subjectID, strings.Join(plan.queries, " "), candidateTopK)
+	keywordSpan.SetAttributes(attribute.Int("retrieval.keyword_matches", len(keywords)))
+	observability.EndSpan(keywordSpan, err)
 	if err != nil {
 		return nil, metrics, err
 	}
@@ -194,11 +229,16 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 	merged := mergeChunks(keywords, vectorChunks)
 	merged = limitCandidates(merged, candidateTopK)
 	metrics.CandidateCount = len(merged)
+	productionCandidates = metrics.CandidateCount
 	if s.svcCtx.Config.Retrieval.Rerank {
 		if err := notifyStage(options.OnStage, "retrieval.rerank.start"); err != nil {
 			return nil, metrics, err
 		}
+		_, rerankSpan := observability.StartSpan(ctx, "retrieval.rerank",
+			attribute.Int("retrieval.candidates", len(merged)),
+		)
 		rerankChunks(query, merged)
+		observability.EndSpan(rerankSpan, nil)
 	} else if err := notifyStage(options.OnStage, "retrieval.rerank.skipped"); err != nil {
 		return nil, metrics, err
 	}
@@ -212,12 +252,24 @@ func (s *Service) SearchWithOptions(ctx context.Context, userID, subjectID, quer
 		maxChunksPerDocument: retrievalConf.MaxChunksPerDocument,
 	})
 	metrics.ReturnedCount = len(filtered)
+	productionReturned = metrics.ReturnedCount
 	metrics.LatencyMS = time.Since(startedAt).Milliseconds()
 	metrics.ExpectedCount, metrics.RecallHitCount, metrics.RecallAtK = recallAtK(filtered, options.ExpectedDocIDs, options.ExpectedChunkIDs)
 	metrics.EvaluationPassed = evaluateRetrieval(metrics, options.ExpectedRoute, s.svcCtx.Config.Evaluation)
 	logx.WithContext(ctx).Infof("retrieval finished: subject_id=%s top_k=%d candidates=%d returned=%d rewrite=%t rerank=%t recall_at_k=%.4f expected=%d hits=%d",
 		subjectID, finalTopK, metrics.CandidateCount, metrics.ReturnedCount, metrics.QueryRewritten, metrics.Reranked, metrics.RecallAtK, metrics.ExpectedCount, metrics.RecallHitCount)
+	productionStatus = "success"
 	return filtered, metrics, nil
+}
+
+func metricOutcome(err error) string {
+	if err == nil {
+		return "success"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "error"
 }
 
 func (s *Service) keywordSearch(ctx context.Context, subjectID, query string, topK int) ([]types.RetrievalChunk, error) {

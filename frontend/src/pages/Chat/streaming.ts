@@ -1,25 +1,20 @@
-import { streamChat } from '../../api/chat'
-import { CHAT_MODEL_OPTIONS } from './models'
+import { streamChat, type AgentStep } from '../../api/chat'
 import { truncateText } from './utils'
 
 export type ChatFailure = {
-  retryable: boolean
   status: string
   detail: string
   toast: string
 }
 
-type RetryCallbacks = {
+type StreamCallbacks = {
   updateMessage: (sessionID: string, messageID: string, patch: Record<string, unknown>) => void
   appendProcessStep: (sessionID: string, messageID: string, step: string) => void
   appendAnswer: (sessionID: string, messageID: string, content: string) => void
+  updateAgentStep: (sessionID: string, messageID: string, step: AgentStep) => void
 }
 
-type RetryLabels = {
-  model: (model: string) => string
-  webSearchEnabled: string
-  retrying: (attempt: number) => string
-  retryNotice: (attempt: number) => string
+type StreamLabels = {
   rewriteDone: (query: string) => string
   rewriteSkipped: string
   retrievalDone: (returned: number, candidates: number) => string
@@ -29,11 +24,10 @@ type RetryLabels = {
   webSourcesDone: (count: number) => string
   answerStreaming: string
   finished: string
-  retryPrepare: string
   done: string
 }
 
-type RetryInput = {
+type StreamInput = {
   sessionID: string
   messageID: string
   question: string
@@ -42,51 +36,23 @@ type RetryInput = {
   llmModel: string
   webSearch: boolean
   topK: number
-  maxAskAttempts: number
   askTimeoutMS: number
-  labels: RetryLabels
-  callbacks: RetryCallbacks
-  classifyChatFailure: (error: unknown) => ChatFailure
+  labels: StreamLabels
+  callbacks: StreamCallbacks
   localizeStatus: (status: string) => string
 }
 
-export async function askWithRetry(input: RetryInput) {
-  let lastError: unknown
-
-  for (let attempt = 1; attempt <= input.maxAskAttempts; attempt += 1) {
-    const controller = new AbortController()
-    let completed = false
-    let receivedDelta = false
-    let timeout = window.setTimeout(() => controller.abort(), input.askTimeoutMS)
-    const resetTimeout = () => {
-      window.clearTimeout(timeout)
-      timeout = window.setTimeout(() => controller.abort(), input.askTimeoutMS)
-    }
-
-    try {
-      if (attempt > 1) {
-        input.callbacks.updateMessage(input.sessionID, input.messageID, {
-          answer: '',
-          errorReason: '',
-          chunks: [],
-          externalLinks: [],
-          metrics: undefined,
-          processSteps: [
-            input.labels.model(
-              CHAT_MODEL_OPTIONS.find(
-                (option) => option.provider === input.llmProvider && option.model === input.llmModel,
-              )?.label ?? input.llmModel,
-            ),
-            ...(input.webSearch ? [input.labels.webSearchEnabled] : []),
-            input.labels.retrying(attempt),
-          ],
-          status: input.labels.retrying(attempt),
-          loading: true,
-        })
-      }
-
-      await streamChat(
-        {
+export async function streamAnswer(input: StreamInput) {
+  const controller = new AbortController()
+  let completed = false
+  let timeout = window.setTimeout(() => controller.abort(), input.askTimeoutMS)
+  const resetTimeout = () => {
+    window.clearTimeout(timeout)
+    timeout = window.setTimeout(() => controller.abort(), input.askTimeoutMS)
+  }
+  try {
+    await streamChat(
+      {
           session_id: input.sessionID,
           message_id: input.messageID,
           subject_id: input.subjectID,
@@ -95,13 +61,16 @@ export async function askWithRetry(input: RetryInput) {
           llm_provider: input.llmProvider,
           llm_model: input.llmModel,
           web_search: input.webSearch,
-        },
-        {
+      },
+      {
           onEvent: resetTimeout,
           onStatus: (status) => {
-			const localizedStatus = input.localizeStatus(status)
-			input.callbacks.updateMessage(input.sessionID, input.messageID, { status: localizedStatus })
-			input.callbacks.appendProcessStep(input.sessionID, input.messageID, localizedStatus)
+            const localizedStatus = input.localizeStatus(status)
+            input.callbacks.updateMessage(input.sessionID, input.messageID, { status: localizedStatus })
+            input.callbacks.appendProcessStep(input.sessionID, input.messageID, localizedStatus)
+          },
+          onAgentStep: (step) => {
+            input.callbacks.updateAgentStep(input.sessionID, input.messageID, step)
           },
           onSources: (chunks) => {
             input.callbacks.updateMessage(input.sessionID, input.messageID, { chunks })
@@ -132,55 +101,36 @@ export async function askWithRetry(input: RetryInput) {
             )
           },
           onDelta: (content) => {
-            receivedDelta = true
             input.callbacks.appendProcessStep(input.sessionID, input.messageID, input.labels.answerStreaming)
             input.callbacks.appendAnswer(input.sessionID, input.messageID, content)
           },
-          onDone: () => {
+          onDone: (answer) => {
             completed = true
             input.callbacks.appendProcessStep(input.sessionID, input.messageID, input.labels.finished)
             input.callbacks.updateMessage(input.sessionID, input.messageID, {
               status: input.labels.done,
+              ...(answer ? { answer } : {}),
               errorReason: '',
               finishedAt: Date.now(),
               loading: false,
             })
           },
-          onError: () => {
-            input.callbacks.appendProcessStep(input.sessionID, input.messageID, input.labels.retryPrepare)
-            input.callbacks.updateMessage(input.sessionID, input.messageID, { status: input.labels.retryPrepare })
-          },
-        },
-        controller.signal,
-      )
-      window.clearTimeout(timeout)
+      },
+      controller.signal,
+    )
+  } catch (error) {
+    if (completed) {
       return
-    } catch (error) {
-      window.clearTimeout(timeout)
-      if (completed) {
-        input.callbacks.updateMessage(input.sessionID, input.messageID, {
-          status: input.labels.done,
-          errorReason: '',
-          finishedAt: Date.now(),
-          loading: false,
-        })
-        return
-      }
-      lastError = error
-      const failure = input.classifyChatFailure(error)
-      if (!receivedDelta && attempt < input.maxAskAttempts && failure.retryable) {
-        input.callbacks.updateMessage(input.sessionID, input.messageID, {
-          status: input.labels.retryNotice(attempt + 1),
-        })
-        continue
-      }
     }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
   }
-
-  throw lastError
 }
 
 const chatStatusKeys: Record<string, string> = {
+  'agent.plan.start': 'chat.status.agentPlan',
+  'agent.answer.start': 'chat.status.agentAnswer',
   'chat.route.overview': 'chat.status.routeOverview',
   'chat.route.navigation': 'chat.status.routeNavigation',
   'chat.route.fallback': 'chat.status.routeFallback',
@@ -223,7 +173,6 @@ export function classifyChatFailure(error: unknown, t: (key: string) => string):
     normalized.includes('context deadline exceeded')
   ) {
     return {
-      retryable: true,
       status: t('chat.failure.timeoutStatus'),
       detail: t('chat.failure.timeoutDetail'),
       toast: t('chat.failure.timeoutToast'),
@@ -237,7 +186,6 @@ export function classifyChatFailure(error: unknown, t: (key: string) => string):
     normalized.includes('402')
   ) {
     return {
-      retryable: false,
       status: t('chat.failure.configStatus'),
       detail: t('chat.failure.configDetail'),
       toast: t('chat.failure.configToast'),
@@ -245,7 +193,6 @@ export function classifyChatFailure(error: unknown, t: (key: string) => string):
   }
   if (normalized.includes('no rows in result set')) {
     return {
-      retryable: false,
       status: t('chat.failure.sessionStatus'),
       detail: t('chat.failure.sessionDetail'),
       toast: t('chat.failure.sessionToast'),
@@ -258,7 +205,6 @@ export function classifyChatFailure(error: unknown, t: (key: string) => string):
     normalized.includes('vector')
   ) {
     return {
-      retryable: false,
       status: t('chat.failure.retrievalStatus'),
       detail: t('chat.failure.retrievalDetail'),
       toast: t('chat.failure.retrievalToast'),
@@ -266,7 +212,6 @@ export function classifyChatFailure(error: unknown, t: (key: string) => string):
   }
 
   return {
-    retryable: false,
     status: t('chat.failure.genericStatus'),
     detail: t('chat.failure.genericDetail'),
     toast: t('chat.failedToast'),

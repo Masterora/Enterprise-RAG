@@ -13,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrIndexTaskNotRetryable = errors.New("index task is not retryable")
+var (
+	ErrIndexTaskNotRetryable  = errors.New("index task is not retryable")
+	ErrIndexTaskStateConflict = errors.New("index task state transition conflict")
+)
 
 type IndexTaskRepo struct {
 	db *pgxpool.Pool
@@ -236,16 +239,27 @@ func (r *IndexTaskRepo) ListByDocument(ctx context.Context, docID, userID string
 }
 
 func (r *IndexTaskRepo) UpdateStatus(ctx context.Context, taskID, status, errMsg string) error {
-	_, err := r.db.Exec(
+	previous, ok := model.TaskPreviousStatuses(status)
+	if !ok {
+		return ErrIndexTaskStateConflict
+	}
+	result, err := r.db.Exec(
 		ctx,
 		`UPDATE index_tasks
 		 SET status = $2, error_message = $3, updated_at = now()
-		 WHERE id = $1`,
+		 WHERE id = $1 AND status = ANY($4)`,
 		taskID,
 		status,
 		errMsg,
+		previous,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrIndexTaskStateConflict
+	}
+	return nil
 }
 
 func (r *IndexTaskRepo) ScheduleRetry(ctx context.Context, taskID string, maxRetries int) (*model.IndexTask, bool, error) {

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"enterprise-rag/backend/internal/infrastructure/observability"
 )
 
 const compatibleEmbeddingBatchSize = 10
@@ -98,6 +100,11 @@ func (c *CompatibleClient) embedBatch(ctx context.Context, texts []string) ([][]
 		Data []struct {
 			Embedding []float32 `json:"embedding"`
 		} `json:"data"`
+		Usage struct {
+			PromptTokens int     `json:"prompt_tokens"`
+			TotalTokens  int     `json:"total_tokens"`
+			Cost         float64 `json:"cost"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		return nil, err
@@ -105,6 +112,11 @@ func (c *CompatibleClient) embedBatch(ctx context.Context, texts []string) ([][]
 	if len(parsed.Data) != len(texts) {
 		return nil, fmt.Errorf("embedding response count mismatch: want=%d got=%d", len(texts), len(parsed.Data))
 	}
+	observability.ReportModelUsage(ctx, observability.ModelUsage{
+		InputTokens: parsed.Usage.PromptTokens,
+		TotalTokens: parsed.Usage.TotalTokens,
+		CostUSD:     parsed.Usage.Cost,
+	})
 
 	vectors := make([][]float32, 0, len(parsed.Data))
 	for _, item := range parsed.Data {

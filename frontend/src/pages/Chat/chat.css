@@ -663,6 +663,53 @@
   margin: 2px 0;
 }
 
+.agent-step-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.agent-step {
+  color: #667085;
+  display: grid;
+  font-size: 13px;
+  gap: 4px 10px;
+  grid-template-columns: minmax(120px, auto) auto auto 1fr;
+}
+
+.agent-step-iteration {
+  color: #98a2b3;
+  white-space: nowrap;
+}
+
+.agent-step-title {
+  color: #344054;
+  font-weight: 600;
+}
+
+.agent-step-status {
+  color: #667085;
+}
+
+.agent-step > div {
+  grid-column: 1 / -1;
+}
+
+.agent-step.is-failed .agent-step-title,
+.agent-step.is-failed .agent-step-status {
+  color: #d92d20;
+}
+
+.theme-dark .agent-step,
+.theme-dark .agent-step-status {
+  color: #8f99aa;
+}
+
+.theme-dark .agent-step-title {
+  color: #d7deeb;
+}
+
 .chat-external-links a,
 .chat-external-link-icon {
   color: #3558d4;

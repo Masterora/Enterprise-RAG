@@ -1,4 +1,4 @@
-import { Button, Dropdown, Input, Modal, Space, message, type MenuProps } from 'antd'
+import { App as AntdApp, Button, Dropdown, Input, Modal, Space, type MenuProps } from 'antd'
 import { CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, MessageOutlined, PlusOutlined } from '@ant-design/icons'
 import { useI18n } from '../../../useI18n'
 import type { SubjectInfo } from '../../../api/subjects'
@@ -33,6 +33,7 @@ export function SessionList({
   onCancelRenameSession,
   onDeleteSession,
 }: SessionListProps) {
+	const { message } = AntdApp.useApp()
   const { t } = useI18n()
 
   function confirmDelete(sessionID: string) {

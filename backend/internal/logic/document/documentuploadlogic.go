@@ -130,7 +130,7 @@ func (l *DocumentUploadLogic) DocumentUpload(r *http.Request) (resp *types.Docum
 		return nil, err
 	}
 
-	if err := taskqueue.Publish(l.svcCtx.Nats, model.TaskTypeParse, indexTask.ID, docID, processingMode); err != nil {
+	if err := taskqueue.Publish(l.ctx, l.svcCtx.Nats, model.TaskTypeParse, indexTask.ID, docID, processingMode); err != nil {
 		_ = l.svcCtx.IndexTaskRepo.UpdateStatus(l.ctx, indexTask.ID, model.TaskStatusFailed, err.Error())
 		_ = l.svcCtx.DocumentRepo.UpdateStatus(l.ctx, docID, model.DocumentStatusFailed, err.Error())
 		return nil, err

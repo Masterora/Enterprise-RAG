@@ -1,5 +1,5 @@
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
-import { Button, Card, Form, Input, Tabs, Typography, message } from 'antd'
+import { App as AntdApp, Button, Card, Form, Input, Tabs, Typography } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { login, register, setAuthToken } from '../../api/auth'
 import { ActionIconButton } from '../../components/ActionIconButton'
@@ -12,6 +12,7 @@ type LoginPageProps = {
 }
 
 export function LoginPage({ isDarkMode, onToggleTheme, onAuthSuccess }: LoginPageProps) {
+	const { message } = AntdApp.useApp()
   const [loginForm] = Form.useForm()
   const [registerForm] = Form.useForm()
   const navigate = useNavigate()

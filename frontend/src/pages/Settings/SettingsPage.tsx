@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, Select, Typography, message } from 'antd'
+import { App as AntdApp, Button, Card, Form, Input, Select, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { getMe, updateUser, type UserInfo } from '../../api/auth'
 import { useI18n, type Language } from '../../useI18n'
@@ -12,6 +12,7 @@ type SettingsFormValues = {
 }
 
 export function SettingsPage() {
+	const { message } = AntdApp.useApp()
   const [form] = Form.useForm<SettingsFormValues>()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -46,7 +47,7 @@ export function SettingsPage() {
     }
 
     void loadProfile()
-  }, [applyUser, t])
+  }, [applyUser, message, t])
 
   async function handleSubmit(values: SettingsFormValues) {
     setSaving(true)

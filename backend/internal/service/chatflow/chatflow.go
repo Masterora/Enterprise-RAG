@@ -123,8 +123,8 @@ func ResolveLLM(ctx context.Context, svcCtx *svc.ServiceContext, req *types.Chat
 	if override.Model == "" {
 		override.Model = svcCtx.Config.LLM.Model
 	}
-	if strings.EqualFold(strings.TrimSpace(override.Provider), strings.TrimSpace(svcCtx.Config.LLM.Provider)) &&
-		strings.TrimSpace(override.Model) == strings.TrimSpace(svcCtx.Config.LLM.Model) {
+	if strings.EqualFold(override.Provider, strings.TrimSpace(svcCtx.Config.LLM.Provider)) &&
+		override.Model == strings.TrimSpace(svcCtx.Config.LLM.Model) {
 		logx.WithContext(ctx).Infof("chat llm resolved: provider=%s model=%s reused_default=true", override.Provider, override.Model)
 		return svcCtx.LLM, nil
 	}
@@ -141,6 +141,7 @@ func PersistTurn(
 	chunks []types.RetrievalChunk,
 	externalLinks []types.ExternalLink,
 	metrics types.RetrievalMetrics,
+	agentSteps []types.AgentStep,
 ) error {
 	sessionID := strings.TrimSpace(req.SessionID)
 	messageID := strings.TrimSpace(req.MessageID)
@@ -159,7 +160,8 @@ func PersistTurn(
 		return err
 	}
 	metadata, err := json.Marshal(chatpresenter.MessageMetadata{
-		Metrics: metrics, ModelLabel: req.LlmModel, ModelID: req.LlmModel, WebSearch: req.WebSearch, ExternalLinks: externalLinks,
+		Metrics: metrics, ModelLabel: req.LlmModel, ModelID: req.LlmModel, WebSearch: req.WebSearch,
+		ExternalLinks: externalLinks, AgentSteps: agentSteps,
 	})
 	if err != nil {
 		return err
@@ -191,4 +193,29 @@ func BuildSessionTitle(question string) string {
 		return string(runes)
 	}
 	return string(runes[:18]) + "..."
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+func isWeakSection(section string) bool {
+	section = strings.TrimSpace(strings.ToLower(section))
+	if section == "" || section == "text" || section == "page" || strings.Contains(section, "目录") || strings.Contains(section, "测试问题") {
+		return true
+	}
+	trimmed := strings.Trim(section, "第0123456789.．-_ /\\页page")
+	return trimmed == ""
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

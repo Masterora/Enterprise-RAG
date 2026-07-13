@@ -36,7 +36,6 @@ func (l *AdminSummaryLogic) AdminSummary() (resp *types.AdminSummaryResp, err er
 	if err != nil {
 		return nil, err
 	}
-
 	return &types.AdminSummaryResp{
 		SubjectTotal:     summary.SubjectTotal,
 		DocumentTotal:    summary.DocumentTotal,

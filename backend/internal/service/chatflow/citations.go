@@ -3,7 +3,6 @@ package chatflow
 import (
 	"regexp"
 	"strconv"
-	"strings"
 
 	"enterprise-rag/backend/internal/types"
 )
@@ -14,14 +13,22 @@ var (
 )
 
 func ReferencedSources(answer string, chunks []types.RetrievalChunk, links []types.ExternalLink) ([]types.RetrievalChunk, []types.ExternalLink) {
-	if strings.TrimSpace(answer) == "无法确定" {
-		return nil, nil
-	}
-	return referencedChunks(answer, chunks), referencedLinks(answer, links)
+	_, referencedChunks, referencedLinks := RemapReferencedSources(answer, chunks, links)
+	return referencedChunks, referencedLinks
 }
 
-func referencedChunks(answer string, chunks []types.RetrievalChunk) []types.RetrievalChunk {
-	indices := referenceIndices(knowledgeReferencePattern, answer)
+func RemapReferencedSources(answer string, chunks []types.RetrievalChunk, links []types.ExternalLink) (string, []types.RetrievalChunk, []types.ExternalLink) {
+	if IsNoAnswer(answer) {
+		return answer, nil, nil
+	}
+	chunkIndices := referenceIndices(knowledgeReferencePattern, answer)
+	linkIndices := referenceIndices(externalReferencePattern, answer)
+	answer = remapReferences(answer, knowledgeReferencePattern, chunkIndices)
+	answer = remapReferences(answer, externalReferencePattern, linkIndices)
+	return answer, selectChunks(chunkIndices, chunks), selectLinks(linkIndices, links)
+}
+
+func selectChunks(indices []int, chunks []types.RetrievalChunk) []types.RetrievalChunk {
 	result := make([]types.RetrievalChunk, 0, len(indices))
 	for _, index := range indices {
 		if index >= 0 && index < len(chunks) {
@@ -31,8 +38,7 @@ func referencedChunks(answer string, chunks []types.RetrievalChunk) []types.Retr
 	return result
 }
 
-func referencedLinks(answer string, links []types.ExternalLink) []types.ExternalLink {
-	indices := referenceIndices(externalReferencePattern, answer)
+func selectLinks(indices []int, links []types.ExternalLink) []types.ExternalLink {
 	result := make([]types.ExternalLink, 0, len(indices))
 	for _, index := range indices {
 		if index >= 0 && index < len(links) {
@@ -40,6 +46,31 @@ func referencedLinks(answer string, links []types.ExternalLink) []types.External
 		}
 	}
 	return result
+}
+
+func remapReferences(answer string, pattern *regexp.Regexp, indices []int) string {
+	remapped := make(map[int]int, len(indices))
+	for index, original := range indices {
+		remapped[original] = index + 1
+	}
+	return pattern.ReplaceAllStringFunc(answer, func(reference string) string {
+		match := pattern.FindStringSubmatch(reference)
+		if len(match) != 2 {
+			return reference
+		}
+		value, err := strconv.Atoi(match[1])
+		if err != nil {
+			return reference
+		}
+		mapped, ok := remapped[value-1]
+		if !ok {
+			return reference
+		}
+		if pattern == externalReferencePattern {
+			return "[外链" + strconv.Itoa(mapped) + "]"
+		}
+		return "[引用" + strconv.Itoa(mapped) + "]"
+	})
 }
 
 func referenceIndices(pattern *regexp.Regexp, answer string) []int {

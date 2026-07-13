@@ -35,6 +35,7 @@ type DocumentChunkInfo {
 type IndexTaskInfo {
 	ID           string `json:"id"`
 	DocID        string `json:"doc_id"`
+	SubjectID    string `json:"subject_id"`
 	Filename     string `json:"filename"`
 	TaskType     string `json:"task_type"`
 	Status       string `json:"status"`
@@ -42,6 +43,18 @@ type IndexTaskInfo {
 	ErrorMessage string `json:"error_message"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
+}
+
+type AgentStep {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	Tool       string `json:"tool"`
+	State      string `json:"state"`
+	Iteration  int    `json:"iteration"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail"`
+	DurationMS int64  `json:"duration_ms"`
 }
 
 type ParseLogInfo {
@@ -114,6 +127,7 @@ type ChatMessageInfo {
 	ModelLabel    string           `json:"model_label"`
 	ModelID       string           `json:"model_id"`
 	WebSearch     bool             `json:"web_search"`
+	AgentSteps    []AgentStep      `json:"agent_steps"`
 	CreatedAt     string           `json:"created_at"`
 }
 
@@ -127,4 +141,3 @@ type ChatSessionInfo {
 	UpdatedAt   string            `json:"updated_at"`
 	Messages    []ChatMessageInfo `json:"messages"`
 }
-

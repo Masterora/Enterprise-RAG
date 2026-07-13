@@ -129,7 +129,7 @@ export function ChatComposer({
             placement="topLeft"
             trigger={['click']}
             disabled={asking}
-            dropdownRender={() => (
+            popupRender={() => (
               <div className="chat-model-dropdown">
                 <div className="chat-model-dropdown-menu">
                   {modelOptions.map((option, index) => (
@@ -185,7 +185,7 @@ export function ChatComposer({
             onOpenChange={onVendorOpenChange}
             popupMatchSelectWidth={false}
             placement="topLeft"
-            popupClassName="chat-vendor-dropdown"
+            classNames={{ popup: { root: 'chat-vendor-dropdown' } }}
             virtual={false}
             variant="borderless"
           />

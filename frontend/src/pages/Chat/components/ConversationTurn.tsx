@@ -31,6 +31,7 @@ function ReasoningProcess({ message }: { message: ChatMessage }) {
   const steps = message.processSteps ?? []
   const [now, setNow] = useState(() => Date.now())
   const externalLinks = message.externalLinks ?? []
+  const agentSteps = message.agentSteps ?? []
 
   useEffect(() => {
     if (!message.loading || !message.startedAt) {
@@ -88,13 +89,39 @@ function ReasoningProcess({ message }: { message: ChatMessage }) {
           )}
         </span>
       </summary>
-      <ol>
-        {steps.map((step, index) => (
-          <li key={`${step}-${index}`}>{step}</li>
-        ))}
-      </ol>
+      {agentSteps.length > 0 ? (
+        <ol className="agent-step-list">
+          {agentSteps.map((step) => (
+            <li key={step.id} className={`agent-step is-${step.status}`}>
+              <span className="agent-step-title">{agentStepTitle(step.title, t)}</span>
+              {step.iteration > 0 ? <span className="agent-step-iteration">{t('chat.agent.iteration', { count: step.iteration })}</span> : null}
+              <span className="agent-step-status">{t(`chat.agent.status.${step.status}`)}</span>
+              {step.duration_ms > 0 ? <span>{formatStepDuration(step.duration_ms)}</span> : null}
+              {step.detail ? <div>{step.detail}</div> : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <ol>
+          {steps.map((step, index) => (
+            <li key={`${step}-${index}`}>{step}</li>
+          ))}
+        </ol>
+      )}
     </details>
   )
+}
+
+function agentStepTitle(key: string, t: (key: string) => string) {
+  const translated = t(`chat.${key}`)
+  return translated === `chat.${key}` ? key : translated
+}
+
+function formatStepDuration(durationMS: number) {
+  if (durationMS < 1000) {
+    return `${durationMS}ms`
+  }
+  return `${(durationMS / 1000).toFixed(1)}s`
 }
 
 function formatElapsed(seconds: number) {
@@ -219,7 +246,7 @@ function SourceDetails({
             <Tag>{chunk.doc_name || t('common.unknownDocument')}</Tag>
             <Tag>{t('chat.section', { section: chunk.section || t('common.unnamedSection') })}</Tag>
             <Tag>{t('chat.page', { page: chunk.page > 0 ? chunk.page : t('common.none') })}</Tag>
-            <Tag>{t('chat.score', { score: `${Math.round(chunk.score * 100)}%` })}</Tag>
+            {chunk.score > 0 ? <Tag>{t('chat.score', { score: `${Math.round(chunk.score * 100)}%` })}</Tag> : null}
           </Space>
         ),
         children: <Typography.Paragraph className="citation-content">{chunk.content}</Typography.Paragraph>,
@@ -277,6 +304,8 @@ function isCannotAnswer(answer: string) {
   return (
     normalized === '无法确定' ||
     normalized === 'Unabletodetermine' ||
+    normalized === 'Cannotdetermine' ||
+    normalized === '判断できません' ||
     normalized.includes('无法回答') ||
     normalized.includes('资料不足')
   )

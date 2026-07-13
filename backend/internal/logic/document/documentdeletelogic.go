@@ -57,7 +57,7 @@ func (l *DocumentDeleteLogic) DocumentDelete(req *types.DocumentDeleteReq) (resp
 	if err := l.svcCtx.DocumentRepo.CreateDeleteTask(l.ctx, document.ID, user.ID, task); err != nil {
 		return nil, err
 	}
-	if err := taskqueue.Publish(l.svcCtx.Nats, task.TaskType, task.ID, task.DocID, ""); err != nil {
+	if err := taskqueue.Publish(l.ctx, l.svcCtx.Nats, task.TaskType, task.ID, task.DocID, ""); err != nil {
 		_ = l.svcCtx.IndexTaskRepo.UpdateStatus(l.ctx, task.ID, model.TaskStatusFailed, err.Error())
 		_ = l.svcCtx.DocumentRepo.UpdateStatus(l.ctx, document.ID, model.DocumentStatusDeleteFailed, err.Error())
 		return nil, err

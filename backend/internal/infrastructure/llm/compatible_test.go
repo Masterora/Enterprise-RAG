@@ -1,8 +1,14 @@
 package llm
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"enterprise-rag/backend/internal/infrastructure/observability"
 )
 
 func TestEnableWebSearch(t *testing.T) {
@@ -56,6 +62,52 @@ func TestEnableWebSearch(t *testing.T) {
 				t.Fatalf("tool type = %q, want %q", tools[0]["type"], tt.wantTool)
 			}
 		})
+	}
+}
+
+func TestGenerateReportsProviderUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"answer"}}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14,"cost":0.002}}`)
+	}))
+	defer server.Close()
+
+	var got observability.ModelUsage
+	ctx := observability.WithModelUsageObserver(context.Background(), func(usage observability.ModelUsage) {
+		got = usage
+	})
+	answer, err := NewCompatibleClient("key", "model", server.URL).Generate(ctx, "question", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answer != "answer" || got != (observability.ModelUsage{InputTokens: 11, OutputTokens: 3, TotalTokens: 14, CostUSD: 0.002}) {
+		t.Fatalf("answer=%q usage=%+v", answer, got)
+	}
+}
+
+func TestGenerateStreamReportsFinalUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":2,\"total_tokens\":10,\"cost\":0.001}}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	var got observability.ModelUsage
+	ctx := observability.WithModelUsageObserver(context.Background(), func(usage observability.ModelUsage) {
+		got = usage
+	})
+	var answer strings.Builder
+	err := NewCompatibleClient("key", "model", server.URL).GenerateStream(ctx, "question", false, func(delta string) error {
+		answer.WriteString(delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answer.String() != "answer" || got.TotalTokens != 10 || got.CostUSD != 0.001 {
+		t.Fatalf("answer=%q usage=%+v", answer.String(), got)
 	}
 }
 

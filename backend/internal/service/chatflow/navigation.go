@@ -74,9 +74,7 @@ func buildDocumentNavigation(
 					Page:       int64(chunk.Page),
 					Section:    chunk.Section,
 					Content:    chunk.Content,
-					Score:      score,
-					RawScore:   score,
-					Source:     "router",
+					Source:     "navigation",
 				},
 			}
 		}
@@ -111,6 +109,14 @@ func buildDocumentNavigation(
 		lines = append(lines, fmt.Sprintf("%d. %s：可优先查看 %s。[引用%d]", index+1, match.document.Filename, sectionText, index+1))
 	}
 	return strings.Join(lines, "\n"), citations, nil
+}
+
+func BuildDocumentNavigationTool(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	userID, subjectID, topic string,
+) (string, []types.RetrievalChunk, error) {
+	return buildDocumentNavigation(ctx, svcCtx, userID, subjectID, topic)
 }
 
 func extractNavigationTopic(query string) string {

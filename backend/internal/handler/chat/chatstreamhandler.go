@@ -75,6 +75,9 @@ func ChatStreamHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			OnStatus: func(message string) error {
 				return writeEvent("status", map[string]string{"message": message})
 			},
+			OnAgentStep: func(step types.AgentStep) error {
+				return writeEvent("agent_step", step)
+			},
 			OnSources: func(chunks []types.RetrievalChunk) error {
 				return writeEvent("sources", map[string][]types.RetrievalChunk{"chunks": chunks})
 			},
@@ -87,8 +90,8 @@ func ChatStreamHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			OnDelta: func(content string) error {
 				return writeEvent("delta", map[string]string{"content": content})
 			},
-			OnDone: func() error {
-				return writeEvent("done", map[string]bool{"ok": true})
+			OnDone: func(answer string) error {
+				return writeEvent("done", map[string]any{"ok": true, "answer": answer})
 			},
 		})
 		if err != nil {

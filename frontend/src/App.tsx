@@ -1,12 +1,14 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './layouts/AppLayout'
-import { ChatPage } from './pages/Chat/ChatPage'
-import { DocumentsPage } from './pages/Documents/DocumentsPage'
-import { LoginPage } from './pages/Login/LoginPage'
-import { RuntimeLogsPage } from './pages/RuntimeLogs/RuntimeLogsPage'
-import { SettingsPasswordPage } from './pages/Settings/SettingsPasswordPage'
-import { SettingsPage } from './pages/Settings/SettingsPage'
-import { SubjectsPage } from './pages/Subjects/SubjectsPage'
+
+const ChatPage = lazy(() => import('./pages/Chat/ChatPage').then((module) => ({ default: module.ChatPage })))
+const DocumentsPage = lazy(() => import('./pages/Documents/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
+const LoginPage = lazy(() => import('./pages/Login/LoginPage').then((module) => ({ default: module.LoginPage })))
+const RuntimeLogsPage = lazy(() => import('./pages/RuntimeLogs/RuntimeLogsPage').then((module) => ({ default: module.RuntimeLogsPage })))
+const SettingsPasswordPage = lazy(() => import('./pages/Settings/SettingsPasswordPage').then((module) => ({ default: module.SettingsPasswordPage })))
+const SettingsPage = lazy(() => import('./pages/Settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const SubjectsPage = lazy(() => import('./pages/Subjects/SubjectsPage').then((module) => ({ default: module.SubjectsPage })))
 
 type AppProps = {
   authToken: string
@@ -19,60 +21,45 @@ export default function App({ authToken, onAuthChange, isDarkMode, onToggleTheme
   const isAuthenticated = Boolean(authToken)
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          isAuthenticated ? (
-            <Navigate to="/chat" replace />
-          ) : (
-            <LoginPage
-              isDarkMode={isDarkMode}
-              onToggleTheme={onToggleTheme}
-              onAuthSuccess={onAuthChange}
-            />
-          )
-        }
-      />
-      <Route
-        element={
-          <AppLayout
-            isDarkMode={isDarkMode}
-            onToggleTheme={onToggleTheme}
-            onLogout={() => onAuthChange('')}
-          />
-        }
-      >
+    <Suspense fallback={null}>
+      <Routes>
         <Route
-          path="/subjects"
-          element={isAuthenticated ? <SubjectsPage /> : <Navigate to="/login" replace />}
+          path="/login"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/chat" replace />
+            ) : (
+              <LoginPage
+                isDarkMode={isDarkMode}
+                onToggleTheme={onToggleTheme}
+                onAuthSuccess={onAuthChange}
+              />
+            )
+          }
         />
         <Route
-          path="/documents"
-          element={isAuthenticated ? <DocumentsPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/chat"
-          element={isAuthenticated ? <ChatPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/logs"
-          element={isAuthenticated ? <RuntimeLogsPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/settings/profile"
-          element={isAuthenticated ? <SettingsPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/settings/security"
-          element={isAuthenticated ? <SettingsPasswordPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/settings"
-          element={<Navigate to={isAuthenticated ? '/settings/profile' : '/login'} replace />}
-        />
-      </Route>
-      <Route path="*" element={<Navigate to={isAuthenticated ? '/chat' : '/login'} replace />} />
-    </Routes>
+          element={
+            isAuthenticated ? (
+              <AppLayout
+                isDarkMode={isDarkMode}
+                onToggleTheme={onToggleTheme}
+                onLogout={() => onAuthChange('')}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        >
+          <Route path="/subjects" element={<SubjectsPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/logs" element={<RuntimeLogsPage />} />
+          <Route path="/settings/profile" element={<SettingsPage />} />
+          <Route path="/settings/security" element={<SettingsPasswordPage />} />
+          <Route path="/settings" element={<Navigate to="/settings/profile" replace />} />
+        </Route>
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/chat' : '/login'} replace />} />
+      </Routes>
+    </Suspense>
   )
 }

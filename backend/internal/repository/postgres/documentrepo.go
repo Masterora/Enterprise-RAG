@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrDocumentStateConflict = errors.New("document state transition conflict")
 
 type DocumentRepo struct {
 	db *pgxpool.Pool
@@ -205,32 +208,72 @@ func (r *DocumentRepo) GetByIDForUser(ctx context.Context, docID, userID string)
 	return document, nil
 }
 
-func (r *DocumentRepo) UpdateParseResult(ctx context.Context, docID, status, plainText string, metadata []byte, errMsg string) error {
-	_, err := r.db.Exec(
+func (r *DocumentRepo) CompleteParse(ctx context.Context, docID, plainText string, metadata []byte) error {
+	result, err := r.db.Exec(
 		ctx,
 		`UPDATE documents
-		 SET status = $2, plain_text = $3, metadata = $4, error_message = $5, updated_at = now()
-		 WHERE id = $1`,
+		 SET status = $2, plain_text = $3, metadata = $4, error_message = NULL, updated_at = now()
+		 WHERE id = $1 AND deleted_at IS NULL AND status = $5`,
 		docID,
-		status,
+		model.DocumentStatusParsed,
 		sql.NullString{String: plainText, Valid: plainText != ""},
 		metadata,
-		sql.NullString{String: errMsg, Valid: errMsg != ""},
+		model.DocumentStatusParsing,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrDocumentStateConflict
+	}
+	return nil
 }
 
 func (r *DocumentRepo) UpdateStatus(ctx context.Context, docID, status, errMsg string) error {
-	_, err := r.db.Exec(
+	previous, ok := model.DocumentPreviousStatuses(status)
+	if !ok {
+		return ErrDocumentStateConflict
+	}
+	result, err := r.db.Exec(
 		ctx,
 		`UPDATE documents
 		 SET status = $2, error_message = $3, updated_at = now()
-		 WHERE id = $1`,
+		 WHERE id = $1 AND deleted_at IS NULL AND status = ANY($4)`,
 		docID,
 		status,
 		sql.NullString{String: errMsg, Valid: errMsg != ""},
+		previous,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrDocumentStateConflict
+	}
+	return nil
+}
+
+func (r *DocumentRepo) ResetStatusForRetry(ctx context.Context, docID, status string) error {
+	previous, ok := model.DocumentRetryPreviousStatuses(status)
+	if !ok {
+		return ErrDocumentStateConflict
+	}
+	result, err := r.db.Exec(
+		ctx,
+		`UPDATE documents
+		 SET status = $2, error_message = NULL, updated_at = now()
+		 WHERE id = $1 AND deleted_at IS NULL AND status = ANY($3)`,
+		docID,
+		status,
+		previous,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrDocumentStateConflict
+	}
+	return nil
 }
 
 func (r *DocumentRepo) AddParseLog(ctx context.Context, log *model.DocumentParseLog) error {
@@ -336,6 +379,10 @@ func (r *DocumentRepo) ClearParseLogsByUser(ctx context.Context, userID, subject
 }
 
 func (r *DocumentRepo) CreateDeleteTask(ctx context.Context, docID, userID string, task *model.IndexTask) error {
+	deletePrevious, ok := model.DocumentPreviousStatuses(model.DocumentStatusDeleting)
+	if !ok {
+		return ErrDocumentStateConflict
+	}
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -344,10 +391,11 @@ func (r *DocumentRepo) CreateDeleteTask(ctx context.Context, docID, userID strin
 		ctx,
 		`UPDATE documents
 		 SET status = $3, error_message = NULL, updated_at = now()
-		 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND status <> $3`,
+		 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND status = ANY($4)`,
 		docID,
 		userID,
 		model.DocumentStatusDeleting,
+		deletePrevious,
 	)
 	if err != nil {
 		_ = tx.Rollback(ctx)
@@ -391,15 +439,21 @@ func (r *DocumentRepo) CompleteDelete(ctx context.Context, docID string) error {
 		_ = tx.Rollback(ctx)
 		return err
 	}
-	if _, err := tx.Exec(
+	result, err := tx.Exec(
 		ctx,
 		`UPDATE documents
 		 SET deleted_at = now(), updated_at = now()
-		 WHERE id = $1 AND deleted_at IS NULL`,
+		 WHERE id = $1 AND deleted_at IS NULL AND status = $2`,
 		docID,
-	); err != nil {
+		model.DocumentStatusDeleting,
+	)
+	if err != nil {
 		_ = tx.Rollback(ctx)
 		return err
+	}
+	if result.RowsAffected() == 0 {
+		_ = tx.Rollback(ctx)
+		return ErrDocumentStateConflict
 	}
 	return tx.Commit(ctx)
 }

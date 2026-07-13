@@ -15,6 +15,7 @@ import {
   ScissorOutlined,
 } from '@ant-design/icons'
 import {
+  App as AntdApp,
   Button,
   Card,
   Modal,
@@ -27,7 +28,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import type { FilterValue, SortOrder, SorterResult } from 'antd/es/table/interface'
 import { useCallback, useEffect, useState } from 'react'
@@ -85,6 +85,7 @@ function formatDuration(start: string, end: string) {
 }
 
 export function RuntimeLogsPage() {
+	const { message } = AntdApp.useApp()
   const { t } = useI18n()
   const [summary, setSummary] = useState<AdminSummary>()
   const [subjects, setSubjects] = useState<SubjectInfo[]>([])
@@ -145,7 +146,7 @@ export function RuntimeLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [logs.length, page, statusFilter, subjectFilter, t, taskTypeFilter, tasks.length, viewMode])
+  }, [logs.length, message, page, statusFilter, subjectFilter, t, taskTypeFilter, tasks.length, viewMode])
 
   useEffect(() => {
     void loadData()

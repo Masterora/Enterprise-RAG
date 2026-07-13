@@ -1,4 +1,5 @@
 import {
+  App as AntdApp,
   Button,
   Card,
   Drawer,
@@ -14,7 +15,6 @@ import {
   Tooltip,
   Typography,
   Upload,
-  message,
   type UploadFile,
 } from 'antd'
 import {
@@ -131,6 +131,7 @@ function documentStageLabel(status: string, t: (key: string) => string) {
 }
 
 export function DocumentsPage() {
+	const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [subjects, setSubjects] = useState<SubjectInfo[]>([])
   const [documents, setDocuments] = useState<DocumentInfo[]>([])
@@ -174,7 +175,7 @@ export function DocumentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, selectedSubjectId, t])
+  }, [message, page, selectedSubjectId, t])
 
   useEffect(() => {
     void loadPageData()

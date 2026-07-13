@@ -24,13 +24,34 @@ Retrieval:
   MaxQueryRunes: 500
   MaxSubQueries: 4
 
+Agent:
+  Enabled: true
+  MaxIterations: 3
+  MaxTools: 3
+  MaxTotalTools: 6
+  TimeoutSeconds: 75
+  ToolTimeoutSeconds: 25
+  MaxQuestionRunes: 4000
+  MaxArgumentRunes: 1000
+  MaxObservationRunes: 12000
+  MaxStepDetailRunes: 600
+  ParallelTools: true
+  EnabledTools:
+    - knowledge_search
+    - knowledge_overview
+    - document_navigation
+    - web_search
+
+Metrics:
+  Enabled: true
+  Path: /metrics
+
 Reliability:
   LLMTimeoutSeconds: 45
   MaxRetries: 2
   RetryBackoffMillis: 300
 
 Evaluation:
-  CasesFile: evaluation-cases.yaml
   MinRecallAtK: 0.8
   MaxLatencyMS: 10000
 
@@ -52,9 +73,6 @@ Embedding:
   BaseURL: https://openrouter.ai/api/v1
 
 Prompt:
-  AnswerTemplate: ""
-  ExplanationTemplate: ""
-  WebSearchTemplate: ""
-  OverviewPolishTemplate: ""
   QueryRewriteTemplate: ""
-  RouteTemplate: ""
+  AgentPlanTemplate: ""
+  AgentAnswerTemplate: ""

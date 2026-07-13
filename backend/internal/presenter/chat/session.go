@@ -14,6 +14,7 @@ type MessageMetadata struct {
 	ModelID       string                 `json:"model_id"`
 	WebSearch     bool                   `json:"web_search"`
 	ExternalLinks []types.ExternalLink   `json:"external_links"`
+	AgentSteps    []types.AgentStep      `json:"agent_steps"`
 }
 
 func MapSession(session model.ChatSession) types.ChatSessionInfo {
@@ -34,6 +35,7 @@ func MapSession(session model.ChatSession) types.ChatSessionInfo {
 			ModelLabel:    metadata.ModelLabel,
 			ModelID:       metadata.ModelID,
 			WebSearch:     metadata.WebSearch,
+			AgentSteps:    metadata.AgentSteps,
 			CreatedAt:     message.CreatedAt.Format(time.RFC3339Nano),
 		})
 	}

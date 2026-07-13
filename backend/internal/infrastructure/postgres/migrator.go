@@ -15,6 +15,16 @@ import (
 var migrationFS embed.FS
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
+	connection, err := db.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer connection.Release()
+	if _, err := connection.Exec(ctx, `SELECT pg_advisory_lock(hashtext('enterprise-rag-migrations'))`); err != nil {
+		return fmt.Errorf("lock migrations: %w", err)
+	}
+	defer connection.Exec(context.Background(), `SELECT pg_advisory_unlock(hashtext('enterprise-rag-migrations'))`)
+
 	if _, err := db.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version VARCHAR(255) PRIMARY KEY,

@@ -12,8 +12,9 @@ type DocumentRepository interface {
 	ListByUser(ctx context.Context, filter model.DocumentListFilter) ([]model.Document, int64, error)
 	GetByID(ctx context.Context, docID string) (*model.Document, error)
 	GetByIDForUser(ctx context.Context, docID, userID string) (*model.Document, error)
-	UpdateParseResult(ctx context.Context, docID, status, plainText string, metadata []byte, errMsg string) error
+	CompleteParse(ctx context.Context, docID, plainText string, metadata []byte) error
 	UpdateStatus(ctx context.Context, docID, status, errMsg string) error
+	ResetStatusForRetry(ctx context.Context, docID, status string) error
 	AddParseLog(ctx context.Context, log *model.DocumentParseLog) error
 	ListParseLogs(ctx context.Context, filter model.ParseLogListFilter) ([]model.DocumentParseLog, int64, error)
 	ClearParseLogsByUser(ctx context.Context, userID, subjectID string) (int64, error)

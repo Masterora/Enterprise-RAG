@@ -1,14 +1,8 @@
-import { Alert, Button, Input, Modal, Select, Space, Typography, message } from 'antd'
+import { Alert, App as AntdApp, Button, Input, Modal, Select, Space, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { listDocuments, type DocumentInfo } from '../../../api/documents'
-import {
-  evaluateRetrieval,
-  searchRetrieval,
-  type RetrievalEvaluateResult,
-  type RetrievalMetrics,
-} from '../../../api/retrieval'
+import { searchRetrieval, type RetrievalMetrics } from '../../../api/retrieval'
 import { useI18n } from '../../../useI18n'
-import { translateErrorMessage } from '../../../utils/errorMessage'
 
 type Props = {
   open: boolean
@@ -17,12 +11,12 @@ type Props = {
 }
 
 export function RetrievalEvaluationModal({ open, subjectID, onClose }: Props) {
+	const { message } = AntdApp.useApp()
   const { t } = useI18n()
   const [documents, setDocuments] = useState<DocumentInfo[]>([])
   const [query, setQuery] = useState('')
   const [expectedDocIDs, setExpectedDocIDs] = useState<string[]>([])
   const [metrics, setMetrics] = useState<RetrievalMetrics | null>(null)
-  const [suite, setSuite] = useState<RetrievalEvaluateResult | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -30,11 +24,10 @@ export function RetrievalEvaluationModal({ open, subjectID, onClose }: Props) {
       return
     }
     setMetrics(null)
-    setSuite(null)
     void listDocuments({ subject_id: subjectID, status: 'indexed', page: 1, page_size: 100 })
       .then((result) => setDocuments(result.list))
       .catch(() => message.error(t('chat.evaluation.loadFailed')))
-  }, [open, subjectID, t])
+  }, [message, open, subjectID, t])
 
   async function evaluate() {
     if (!query.trim() || expectedDocIDs.length === 0) {
@@ -57,17 +50,6 @@ export function RetrievalEvaluationModal({ open, subjectID, onClose }: Props) {
     }
   }
 
-  async function evaluateSuite() {
-    setLoading(true)
-    try {
-      setSuite(await evaluateRetrieval(subjectID))
-    } catch {
-      message.error(t('chat.evaluation.failed'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <Modal
       open={open}
@@ -75,9 +57,6 @@ export function RetrievalEvaluationModal({ open, subjectID, onClose }: Props) {
       onCancel={onClose}
       footer={[
         <Button key="cancel" onClick={onClose}>{t('common.cancel')}</Button>,
-        <Button key="suite" loading={loading} onClick={() => void evaluateSuite()}>
-          {t('chat.evaluation.runSuite')}
-        </Button>,
         <Button key="run" type="primary" loading={loading} onClick={() => void evaluate()}>
           {t('chat.evaluation.run')}
         </Button>,
@@ -115,26 +94,6 @@ export function RetrievalEvaluationModal({ open, subjectID, onClose }: Props) {
             })}
           />
         )}
-        {suite && (
-          <Alert
-            type={suite.passed === suite.total ? 'success' : 'warning'}
-            showIcon
-            message={t('chat.evaluation.suiteResult', { passed: suite.passed, total: suite.total })}
-            description={t('chat.evaluation.suiteMetrics', {
-              recall: `${(suite.average_recall_at_k * 100).toFixed(1)}%`,
-              route: `${(suite.route_accuracy * 100).toFixed(1)}%`,
-              latency: suite.average_latency_ms,
-            })}
-          />
-        )}
-        {suite?.cases.filter((item) => !item.passed).map((item) => (
-          <Typography.Text key={item.name} type="danger">
-            {item.name}：
-			{(item.error_message && translateErrorMessage(item.error_message, t)) ||
-				item.missing_documents.join('、') ||
-				t('chat.evaluation.notPassed')}
-          </Typography.Text>
-        ))}
       </Space>
     </Modal>
   )

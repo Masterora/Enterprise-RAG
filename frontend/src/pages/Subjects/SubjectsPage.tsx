@@ -1,5 +1,5 @@
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
-import { Button, Card, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Table, Typography, message } from 'antd'
+import { App as AntdApp, Button, Card, Form, Input, Modal, Pagination, Popconfirm, Select, Space, Table, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import {
   createSubject,
@@ -12,6 +12,7 @@ import {
 import { useI18n } from '../../useI18n'
 
 export function SubjectsPage() {
+	const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [subjects, setSubjects] = useState<SubjectInfo[]>([])
@@ -35,7 +36,7 @@ export function SubjectsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, t])
+  }, [message, page, t])
 
   useEffect(() => {
     void loadSubjects()
