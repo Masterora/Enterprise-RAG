@@ -1,0 +1,27 @@
+syntax = "v1"
+
+type ModelServiceSettingsResp {
+	Provider           string `json:"provider"`
+	BaseURL            string `json:"base_url"`
+	EmbeddingModel     string `json:"embedding_model"`
+	EmbeddingDimension int    `json:"embedding_dimension"`
+	APIKeyConfigured   bool   `json:"api_key_configured"`
+	APIKeyHint         string `json:"api_key_hint"`
+	ConfigurationSource string `json:"configuration_source"`
+}
+
+type ModelServiceSettingsUpdateReq {
+	APIKey string `json:"api_key"`
+}
+
+@server (
+	group:      settings
+	middleware: AuthMiddleware
+)
+service rag-api {
+	@handler ModelServiceSettingsHandler
+	post /api/settings/model-service returns (ModelServiceSettingsResp)
+
+	@handler ModelServiceSettingsUpdateHandler
+	post /api/settings/model-service/update (ModelServiceSettingsUpdateReq) returns (ModelServiceSettingsResp)
+}

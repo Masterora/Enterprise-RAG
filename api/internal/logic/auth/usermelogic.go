@@ -1,0 +1,51 @@
+// Code scaffolded by goctl. Safe to edit.
+// goctl 1.10.1
+
+package auth
+
+import (
+	"context"
+
+	"enterprise-rag/api/internal/auth"
+	"enterprise-rag/api/internal/svc"
+	"enterprise-rag/api/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type UserMeLogic struct {
+	logx.Logger
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewUserMeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UserMeLogic {
+	return &UserMeLogic{
+		Logger: logx.WithContext(ctx),
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+func (l *UserMeLogic) UserMe() (resp *types.UserMeResp, err error) {
+	session, err := auth.CurrentUser(l.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := l.svcCtx.UserRepo.GetByID(l.ctx, session.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.UserMeResp{
+		User: types.UserInfo{
+			ID:       user.ID,
+			TenantID: user.TenantID,
+			Username: user.Username,
+			Nickname: user.Nickname,
+			Email:    user.Email,
+			Language: user.Language,
+		},
+	}, nil
+}

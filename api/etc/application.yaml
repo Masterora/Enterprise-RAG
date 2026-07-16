@@ -1,0 +1,56 @@
+Worker:
+  ParseConcurrency: 5
+  ChunkConcurrency: 5
+  EmbeddingConcurrency: 3
+  DeleteConcurrency: 1
+  TaskTimeoutSeconds: 300
+  ShutdownTimeoutSeconds: 30
+
+RateLimit:
+  PeriodSeconds: 60
+  ChatQuota: 20
+  RetrievalQuota: 60
+  UploadQuota: 60
+
+Chunking:
+  Version: v1
+  Size: 800
+  Overlap: 120
+  MinSize: 120
+  BoundaryLookback: 160
+
+Retrieval:
+  TopK: 5
+  CandidateMultiplier: 5
+  CandidateLimit: 50
+  SimilarityThreshold: 0.35
+  RelativeScoreThreshold: 0.72
+  MaxCitations: 5
+  MaxChunksPerDocument: 3
+  Rerank: true
+  MaxQueryRunes: 500
+  MaxSubQueries: 4
+
+AgentService:
+  URL: http://localhost:8000
+  ServiceToken: ${AGENT_SERVICE_TOKEN}
+  TimeoutSeconds: 90
+
+Metrics:
+  Enabled: true
+  Path: /metrics
+
+Evaluation:
+  MinRecallAtK: 0.8
+  MaxLatencyMS: 10000
+
+Auth:
+  AccessSecret: ${RAG_AUTH_SECRET}
+  ExpireHours: 72
+
+Embedding:
+  Provider: openrouter
+  Model: openai/text-embedding-3-small
+  Dimension: 1536
+  ApiKey: ${OPENROUTER_API_KEY}
+  BaseURL: https://openrouter.ai/api/v1

@@ -1,0 +1,143 @@
+syntax = "v1"
+
+type ChatAskReq {
+	SessionID        string   `json:"session_id,optional"`
+	MessageID        string   `json:"message_id,optional"`
+	SubjectID        string   `json:"subject_id"`
+	Query            string   `json:"query"`
+	TopK             int      `json:"top_k,optional"`
+	LlmProvider      string   `json:"llm_provider,optional"`
+	LlmModel         string   `json:"llm_model,optional"`
+	WebSearch        bool     `json:"web_search,optional"`
+	ExpectedDocIDs   []string `json:"expected_doc_ids,optional"`
+	ExpectedChunkIDs []string `json:"expected_chunk_ids,optional"`
+	ExpectedRoute    string   `json:"expected_route,optional"`
+	ExpectedOutcome  string   `json:"expected_outcome,optional"`
+}
+
+type ChatAskResp {
+	RunID         string           `json:"run_id"`
+	Answer        string           `json:"answer"`
+	Chunks        []RetrievalChunk `json:"chunks"`
+	ExternalLinks []ExternalLink   `json:"external_links"`
+	Metrics       RetrievalMetrics `json:"metrics"`
+	AgentSteps    []AgentStep      `json:"agent_steps"`
+}
+
+type ChatRunReq {
+	RunID string `json:"run_id"`
+}
+
+type ChatRunEventsReq {
+	RunID         string `json:"run_id"`
+	AfterSequence int64  `json:"after_sequence,optional"`
+	Limit         int    `json:"limit,optional"`
+}
+
+type ChatRunInfo {
+	ID              string `json:"id"`
+	Status          string `json:"status"`
+	SubjectID       string `json:"subject_id"`
+	SessionID       string `json:"session_id"`
+	MessageID       string `json:"message_id"`
+	ErrorMessage    string `json:"error_message"`
+	CancelRequested bool   `json:"cancel_requested"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
+type ChatRunEventInfo {
+	Sequence  int64          `json:"sequence"`
+	Type      string         `json:"type"`
+	Payload   map[string]any `json:"payload"`
+	CreatedAt string         `json:"created_at"`
+}
+
+type ChatRunDetailResp {
+	Run    ChatRunInfo    `json:"run"`
+	Result map[string]any `json:"result"`
+}
+
+type ChatRunEventsResp {
+	List []ChatRunEventInfo `json:"list"`
+}
+
+type ChatRunCancelResp {
+	Cancelled bool `json:"cancelled"`
+}
+
+type ChatSessionCreateReq {
+	ID          string `json:"id"`
+	SubjectID   string `json:"subject_id,optional"`
+	Title       string `json:"title"`
+	LlmProvider string `json:"llm_provider,optional"`
+	LlmModel    string `json:"llm_model,optional"`
+}
+
+type ChatSessionCreateResp {
+	Session ChatSessionInfo `json:"session"`
+}
+
+type ChatSessionListResp {
+	List []ChatSessionInfo `json:"list"`
+}
+
+type ChatSessionUpdateReq {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type ChatSessionUpdateResp {
+	Updated bool `json:"updated"`
+}
+
+type ChatSessionDeleteReq {
+	ID string `json:"id"`
+}
+
+type ChatSessionDeleteResp {
+	Deleted bool `json:"deleted"`
+}
+
+@server (
+	group:      chat
+	middleware: AuthMiddleware
+)
+service rag-api {
+	@handler ChatSessionCreateHandler
+	post /api/chat/sessions/create (ChatSessionCreateReq) returns (ChatSessionCreateResp)
+
+	@handler ChatSessionListHandler
+	post /api/chat/sessions/list returns (ChatSessionListResp)
+
+	@handler ChatSessionUpdateHandler
+	post /api/chat/sessions/update (ChatSessionUpdateReq) returns (ChatSessionUpdateResp)
+
+	@handler ChatSessionDeleteHandler
+	post /api/chat/sessions/delete (ChatSessionDeleteReq) returns (ChatSessionDeleteResp)
+
+	@handler ChatRunDetailHandler
+	post /api/chat/runs/detail (ChatRunReq) returns (ChatRunDetailResp)
+
+	@handler ChatRunEventsHandler
+	post /api/chat/runs/events (ChatRunEventsReq) returns (ChatRunEventsResp)
+
+	@handler ChatRunCancelHandler
+	post /api/chat/runs/cancel (ChatRunReq) returns (ChatRunCancelResp)
+}
+
+@server (
+	group:      chatgeneration
+	middleware: AuthMiddleware,RateLimitMiddleware
+)
+service rag-api {
+	@handler ChatAskHandler
+	post /api/chat/ask (ChatAskReq) returns (ChatAskResp)
+
+	@handler ChatStreamHandler
+	post /api/chat/stream (ChatAskReq)
+
+	@handler ChatRunResumeHandler
+	post /api/chat/runs/resume (ChatRunReq) returns (ChatAskResp)
+}
+

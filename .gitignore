@@ -16,7 +16,17 @@ dist-ssr/
 # Go
 *.test
 coverage.out
-backend/.cache/
+api/.cache/
+artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+htmlcov/
+.coverage
 
 # Local runtime data
 .env

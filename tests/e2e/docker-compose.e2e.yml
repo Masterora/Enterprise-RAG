@@ -1,0 +1,24 @@
+services:
+  mock-model:
+    build:
+      context: ./tests/e2e/mock_model
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  agent:
+    environment:
+      AGENT_MODEL_BASE_URL: http://mock-model:8080/v1
+    depends_on:
+      mock-model:
+        condition: service_healthy
+
+  api:
+    environment:
+      RAG_EMBEDDING_BASE_URL: http://mock-model:8080/v1
+      RAG_RATE_LIMIT_CHAT_QUOTA: "3"
+    depends_on:
+      mock-model:
+        condition: service_healthy

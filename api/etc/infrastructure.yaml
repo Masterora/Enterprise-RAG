@@ -1,0 +1,29 @@
+Postgres:
+  DataSource: postgres://rag:rag@localhost:55432/rag?sslmode=disable
+  MaxConns: 30
+  MinConns: 2
+  MaxConnLifetimeMinutes: 30
+  MaxConnIdleMinutes: 5
+  HealthCheckSeconds: 30
+
+Redis:
+  Host: localhost:6379
+  Password: ${REDIS_PASSWORD}
+  DB: 0
+
+NATS:
+  Url: nats://localhost:4222
+
+MinIO:
+  Endpoint: localhost:9000
+  AccessKey: minioadmin
+  SecretKey: minioadmin
+  Bucket: rag-documents
+  UseSSL: false
+
+Milvus:
+  Address: localhost:19530
+  Collection: document_vectors
+  Dimension: 1536
+  MetricType: COSINE
+  IndexType: HNSW

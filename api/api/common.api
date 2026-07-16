@@ -1,0 +1,149 @@
+syntax = "v1"
+
+type SubjectInfo {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Visibility  string `json:"visibility"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type DocumentInfo {
+	ID           string `json:"id"`
+	SubjectID    string `json:"subject_id"`
+	Filename     string `json:"filename"`
+	FileType     string `json:"file_type"`
+	FileSize     int64  `json:"file_size"`
+	FileURL      string `json:"file_url"`
+	Status       string `json:"status"`
+	ErrorMessage string `json:"error_message"`
+	Progress     int    `json:"progress"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type DocumentChunkInfo {
+	ID         string `json:"id"`
+	ChunkIndex int    `json:"chunk_index"`
+	Page       int    `json:"page"`
+	Section    string `json:"section"`
+	Content    string `json:"content"`
+	TokenCount int    `json:"token_count"`
+}
+
+type IndexTaskInfo {
+	ID           string `json:"id"`
+	DocID        string `json:"doc_id"`
+	SubjectID    string `json:"subject_id"`
+	Filename     string `json:"filename"`
+	TaskType     string `json:"task_type"`
+	Status       string `json:"status"`
+	RetryCount   int    `json:"retry_count"`
+	ErrorMessage string `json:"error_message"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type AgentStep {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	Tool       string `json:"tool"`
+	State      string `json:"state"`
+	Iteration  int    `json:"iteration"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail"`
+	DurationMS int64  `json:"duration_ms"`
+}
+
+type ParseLogInfo {
+	ID           string `json:"id"`
+	DocID        string `json:"doc_id"`
+	Filename     string `json:"filename"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+	ErrorMessage string `json:"error_message"`
+	CreatedAt    string `json:"created_at"`
+}
+
+type UserInfo {
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Language string `json:"language"`
+}
+
+type ExternalLink {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
+}
+
+type RetrievalChunk {
+	ID              string  `json:"id"`
+	EvidenceID      string  `json:"evidence_id"`
+	TenantID        string  `json:"tenant_id"`
+	DocID           string  `json:"doc_id"`
+	DocName         string  `json:"doc_name"`
+	SubjectID       string  `json:"subject_id"`
+	UserID          string  `json:"user_id"`
+	ChunkIndex      int64   `json:"chunk_index"`
+	Page            int64   `json:"page"`
+	Section         string  `json:"section"`
+	Content         string  `json:"content"`
+	DocumentVersion int     `json:"document_version"`
+	ContentHash     string  `json:"content_hash"`
+	Score           float64 `json:"score"`
+	RawScore        float64 `json:"raw_score"`
+	Source          string  `json:"source"`
+}
+
+type RetrievalMetrics {
+	OriginalQuery    string  `json:"original_query"`
+	SearchQuery      string  `json:"search_query"`
+	QueryRewritten   bool    `json:"query_rewritten"`
+	Reranked         bool    `json:"reranked"`
+	TopK             int     `json:"top_k"`
+	CandidateCount   int     `json:"candidate_count"`
+	ReturnedCount    int     `json:"returned_count"`
+	SubQueryCount    int     `json:"sub_query_count"`
+	ExpectedCount    int     `json:"expected_count"`
+	RecallHitCount   int     `json:"recall_hit_count"`
+	RecallAtK        float64 `json:"recall_at_k"`
+	Route            string  `json:"route"`
+	RouteCorrect     bool    `json:"route_correct"`
+	LatencyMS        int64   `json:"latency_ms"`
+	EvaluationPassed bool    `json:"evaluation_passed"`
+	CitationCount    int     `json:"citation_count"`
+	Answered         bool    `json:"answered"`
+	OutcomeCorrect   bool    `json:"outcome_correct"`
+}
+
+type ChatMessageInfo {
+	ID            string           `json:"id"`
+	Question      string           `json:"question"`
+	Answer        string           `json:"answer"`
+	Chunks        []RetrievalChunk `json:"chunks"`
+	ExternalLinks []ExternalLink   `json:"external_links"`
+	Metrics       RetrievalMetrics `json:"metrics"`
+	ModelLabel    string           `json:"model_label"`
+	ModelID       string           `json:"model_id"`
+	WebSearch     bool             `json:"web_search"`
+	AgentSteps    []AgentStep      `json:"agent_steps"`
+	CreatedAt     string           `json:"created_at"`
+}
+
+type ChatSessionInfo {
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	SubjectID   string            `json:"subject_id"`
+	LlmProvider string            `json:"llm_provider"`
+	LlmModel    string            `json:"llm_model"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+	Messages    []ChatMessageInfo `json:"messages"`
+}
+

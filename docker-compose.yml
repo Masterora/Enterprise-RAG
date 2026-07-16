@@ -4,37 +4,66 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: rag
-      POSTGRES_USER: rag
-      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
     ports:
-      - "55432:5432"
+      - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7.4-alpine
+    command:
+      - sh
+      - -c
+      - exec redis-server --save '' --appendonly no --requirepass "$$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping 2>/dev/null | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   nats:
     image: nats:2.10-alpine
-    command: ["-js"]
+    command: ["-js", "-m", "8222", "-sd", "/data"]
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "${NATS_PORT:-4222}:4222"
+      - "${NATS_MONITOR_PORT:-8222}:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - nats_data:/data
 
   minio:
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.18
@@ -57,8 +86,8 @@ services:
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
-      MINIO_ACCESS_KEY_ID: minioadmin
-      MINIO_SECRET_ACCESS_KEY: minioadmin
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET_NAME: milvus-bucket
     depends_on:
       etcd:
@@ -66,10 +95,92 @@ services:
       minio:
         condition: service_started
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_HEALTH_PORT:-9091}:9091"
     volumes:
       - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  agent:
+    build:
+      context: ./agent
+    environment:
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN is required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-replace-with-openrouter-api-key}
+      AGENT_BACKEND_URL: http://api:9999
+      AGENT_POSTGRES_DSN: ${POSTGRES_DSN:?POSTGRES_DSN is required}
+      AGENT_MODEL_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+    environment:
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN is required}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-replace-with-openrouter-api-key}
+      RAG_POSTGRES_DSN: ${POSTGRES_DSN:?POSTGRES_DSN is required}
+      RAG_REDIS_HOST: redis:6379
+      RAG_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      RAG_NATS_URL: nats://nats:4222
+      RAG_MINIO_ENDPOINT: minio:9000
+      RAG_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      RAG_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      RAG_MILVUS_ADDRESS: milvus:19530
+      RAG_AGENT_URL: http://agent:8000
+      RAG_EMBEDDING_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      RAG_AUTH_SECRET: ${RAG_AUTH_SECRET:?RAG_AUTH_SECRET is required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    ports:
+      - "${API_HTTP_PORT:-9999}:9999"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9999/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+    ports:
+      - "${WEB_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.5.0
@@ -77,10 +188,8 @@ services:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./deploy/monitoring/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ./deploy/monitoring/alerts.yaml:/etc/prometheus/alerts.yaml:ro
@@ -91,8 +200,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.156.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
     volumes:
       - ./deploy/monitoring/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
@@ -106,7 +215,7 @@ services:
     environment:
       JAEGER_LISTEN_HOST: 0.0.0.0
     ports:
-      - "16686:16686"
+      - "${JAEGER_PORT:-16686}:16686"
     volumes:
       - ./deploy/monitoring/jaeger.yaml:/jaeger/config.yaml:ro
     restart: unless-stopped
@@ -119,7 +228,7 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_USERS_DEFAULT_THEME: dark
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     volumes:
       - ./deploy/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
@@ -134,6 +243,7 @@ services:
 
 volumes:
   postgres_data:
+  nats_data:
   minio_data:
   etcd_data:
   milvus_data:

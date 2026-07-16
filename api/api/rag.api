@@ -1,0 +1,16 @@
+syntax = "v1"
+
+info (
+	title:  "Enterprise RAG API"
+	desc:   "Enterprise knowledge base RAG API"
+	author: "Enterprise-RAG"
+)
+
+import "common.api"
+import "auth.api"
+import "subject.api"
+import "document.api"
+import "admin.api"
+import "retrieval.api"
+import "chat.api"
+import "settings.api"

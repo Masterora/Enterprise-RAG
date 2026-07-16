@@ -1,0 +1,15 @@
+Name: rag-api
+Host: 0.0.0.0
+Port: 9999
+Timeout: 120000
+MaxBytes: 53477376
+
+Telemetry:
+  Name: enterprise-rag-api
+  Endpoint: localhost:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc
+
+Includes:
+  - infrastructure.yaml
+  - application.yaml

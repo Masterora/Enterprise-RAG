@@ -1,0 +1,75 @@
+syntax = "v1"
+
+type DocumentUploadResp {
+	Document DocumentInfo `json:"document"`
+}
+
+type DocumentListReq {
+	SubjectID string `json:"subject_id,optional"`
+	Status    string `json:"status,optional"`
+	Keyword   string `json:"keyword,optional"`
+	Page      int    `json:"page,optional"`
+	PageSize  int    `json:"page_size,optional"`
+}
+
+type DocumentListResp {
+	List  []DocumentInfo `json:"list"`
+	Total int64          `json:"total"`
+}
+
+type DocumentDetailReq {
+	ID string `json:"id"`
+}
+
+type DocumentDetailResp {
+	Document DocumentInfo        `json:"document"`
+	Chunks   []DocumentChunkInfo `json:"chunks"`
+	Tasks    []IndexTaskInfo     `json:"tasks"`
+	Logs     []ParseLogInfo      `json:"logs"`
+}
+
+type DocumentDeleteReq {
+	ID string `json:"id"`
+}
+
+type DocumentDeleteResp {
+	Task IndexTaskInfo `json:"task"`
+}
+
+type IndexTaskRetryReq {
+	ID string `json:"id"`
+}
+
+type IndexTaskRetryResp {
+	Task IndexTaskInfo `json:"task"`
+}
+
+type DocumentClearFailedResp {
+	Deleted int64 `json:"deleted"`
+}
+
+@server (
+	group:      document
+	middleware: AuthMiddleware,RateLimitMiddleware
+)
+service rag-api {
+	// multipart/form-data: subject_id + file
+	@handler DocumentUploadHandler
+	post /api/documents/upload returns (DocumentUploadResp)
+
+	@handler DocumentListHandler
+	post /api/documents/list (DocumentListReq) returns (DocumentListResp)
+
+	@handler DocumentDetailHandler
+	post /api/documents/detail (DocumentDetailReq) returns (DocumentDetailResp)
+
+	@handler DocumentDeleteHandler
+	post /api/documents/delete (DocumentDeleteReq) returns (DocumentDeleteResp)
+
+	@handler IndexTaskRetryHandler
+	post /api/documents/tasks/retry (IndexTaskRetryReq) returns (IndexTaskRetryResp)
+
+	@handler DocumentClearFailedHandler
+	post /api/documents/clear-failed returns (DocumentClearFailedResp)
+}
+
